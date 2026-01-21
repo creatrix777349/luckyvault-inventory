@@ -8,15 +8,15 @@ import {
 import { ToastContainer, useToast } from '../components/Toast'
 import { ArrowRightLeft, ArrowRight, Save } from 'lucide-react'
 
-// The 8 allowed inventory locations
+// The allowed inventory locations (matching database)
 const ALLOWED_LOCATION_NAMES = [
   'Master Inventory',
-  'eBay One',
-  'eBay Two/Slabbie Patty',
-  'Tiktok Rockets HQ',
-  'Tiktok Packheads',
-  'Whatnot',
-  'Storefront',
+  'Stream Room - eBay LuckyVaultUS',
+  'Stream Room - eBay SlabbiePatty',
+  'Stream Room - TikTok RocketsHQ',
+  'Stream Room - TikTok Whatnot',
+  'Stream Room - Whatnot Rockets',
+  'Front Store',
   'Other/Out'
 ]
 
