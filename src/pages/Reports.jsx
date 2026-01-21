@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { BarChart3, Calendar, CalendarRange, CalendarDays, ShoppingCart, Receipt, FileText } from 'lucide-react'
+import { BarChart3, Calendar, CalendarRange, CalendarDays, ShoppingCart, Receipt, FileText, Filter } from 'lucide-react'
 
 export default function Reports() {
   const { toasts, addToast, removeToast } = useToast()
@@ -13,6 +13,7 @@ export default function Reports() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [reportData, setReportData] = useState(null)
+  const [countryFilter, setCountryFilter] = useState('') // Source country filter
 
   const getWeekDates = (date) => {
     const d = new Date(date)
@@ -71,7 +72,7 @@ export default function Reports() {
       try {
         const { data: expData, error: expError } = await supabase
           .from('business_expenses')
-          .select('*')
+          .select('*, payment_method:payment_methods(name)')
           .gte('date', start)
           .lte('date', end)
           .order('date', { ascending: false })
@@ -79,6 +80,9 @@ export default function Reports() {
       } catch (e) {
         console.log('Business expenses table may not exist yet')
       }
+
+      // Get unique source countries for filter dropdown
+      const countries = [...new Set(acquisitions?.map(a => a.source_country).filter(Boolean))]
 
       // Calculate totals
       const totalAcquisitionsCost = acquisitions?.reduce((sum, a) => sum + (a.cost_usd || 0), 0) || 0
@@ -103,6 +107,15 @@ export default function Reports() {
         return acc
       }, {}) || {}
 
+      // Group by source country
+      const byCountry = acquisitions?.reduce((acc, a) => {
+        const country = a.source_country || 'Unknown'
+        if (!acc[country]) acc[country] = { count: 0, total: 0 }
+        acc[country].count += a.quantity_purchased || 0
+        acc[country].total += a.cost_usd || 0
+        return acc
+      }, {}) || {}
+
       // Group expenses by category
       const expensesByCategory = expenses?.reduce((acc, e) => {
         const cat = e.category || 'other'
@@ -116,12 +129,14 @@ export default function Reports() {
         dateRange: { start, end },
         acquisitions: acquisitions || [],
         expenses: expenses || [],
+        countries,
         totalAcquisitionsCost,
         totalExpensesCost,
         grandTotal: totalAcquisitionsCost + totalExpensesCost,
         totalItems,
         byAcquirer,
         byBrand,
+        byCountry,
         expensesByCategory
       })
     } catch (error) {
@@ -144,6 +159,16 @@ export default function Reports() {
     if (currency === 'RMB') return `¥${amount?.toLocaleString() || 0}`
     return `$${amount?.toFixed(2) || '0.00'}`
   }
+
+  // Filter acquisitions by country
+  const filteredAcquisitions = reportData?.acquisitions?.filter(a => {
+    if (!countryFilter) return true
+    return a.source_country === countryFilter
+  }) || []
+
+  // Recalculate filtered totals
+  const filteredTotalCost = filteredAcquisitions.reduce((sum, a) => sum + (a.cost_usd || 0), 0)
+  const filteredTotalItems = filteredAcquisitions.reduce((sum, a) => sum + (a.quantity_purchased || 0), 0)
 
   return (
     <div className="fade-in">
@@ -344,11 +369,43 @@ export default function Reports() {
           {/* Acquisitions Tab - Individual entries at actual purchase price */}
           {activeTab === 'acquisitions' && (
             <div className="card">
-              <h3 className="font-display text-lg font-semibold text-white mb-4">
-                Acquisitions Detail
-                <span className="text-gray-500 text-sm font-normal ml-2">(actual purchase prices)</span>
-              </h3>
-              {reportData.acquisitions.length === 0 ? (
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-display text-lg font-semibold text-white">
+                  Acquisitions Detail
+                  <span className="text-gray-500 text-sm font-normal ml-2">(actual purchase prices)</span>
+                </h3>
+                
+                {/* Country Filter */}
+                {reportData.countries.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Filter size={16} className="text-gray-400" />
+                    <select
+                      value={countryFilter}
+                      onChange={(e) => setCountryFilter(e.target.value)}
+                      className="text-sm py-1"
+                    >
+                      <option value="">All Countries</option>
+                      {reportData.countries.map(country => (
+                        <option key={country} value={country}>{country}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Filtered totals banner */}
+              {countryFilter && (
+                <div className="bg-vault-dark p-3 rounded-lg mb-4 flex justify-between items-center">
+                  <span className="text-gray-400">
+                    Filtered: <span className="text-white font-medium">{countryFilter}</span>
+                  </span>
+                  <span className="text-vault-gold font-bold">
+                    {filteredTotalItems} items • ${filteredTotalCost.toFixed(2)}
+                  </span>
+                </div>
+              )}
+
+              {filteredAcquisitions.length === 0 ? (
                 <p className="text-gray-400 text-center py-8">No acquisitions in this period</p>
               ) : (
                 <div className="overflow-x-auto">
@@ -357,6 +414,7 @@ export default function Reports() {
                       <tr>
                         <th>Date</th>
                         <th>Product</th>
+                        <th>Source</th>
                         <th>Acquirer</th>
                         <th>Vendor</th>
                         <th className="text-right">Qty</th>
@@ -365,7 +423,7 @@ export default function Reports() {
                       </tr>
                     </thead>
                     <tbody>
-                      {reportData.acquisitions.map(acq => (
+                      {filteredAcquisitions.map(acq => (
                         <tr key={acq.id}>
                           <td className="text-gray-400">{acq.date_purchased}</td>
                           <td>
@@ -373,6 +431,16 @@ export default function Reports() {
                             <div className="text-gray-500 text-xs">
                               {acq.product?.brand} • {acq.product?.type} • {acq.product?.language}
                             </div>
+                          </td>
+                          <td>
+                            <span className={`badge ${
+                              acq.source_country === 'Japan' ? 'badge-info' :
+                              acq.source_country === 'China' ? 'badge-warning' :
+                              acq.source_country === 'USA' ? 'badge-success' :
+                              'badge-secondary'
+                            }`}>
+                              {acq.source_country || '-'}
+                            </span>
                           </td>
                           <td className="text-gray-300">{acq.acquirer?.name || '-'}</td>
                           <td className="text-gray-400">{acq.vendor?.name || '-'}</td>
@@ -387,11 +455,11 @@ export default function Reports() {
                       ))}
                       {/* Total Row */}
                       <tr className="border-t-2 border-vault-border">
-                        <td colSpan={4} className="font-semibold text-white">TOTAL</td>
-                        <td className="text-right font-semibold text-white">{reportData.totalItems}</td>
+                        <td colSpan={5} className="font-semibold text-white">TOTAL</td>
+                        <td className="text-right font-semibold text-white">{filteredTotalItems}</td>
                         <td></td>
                         <td className="text-right font-bold text-vault-gold text-lg">
-                          ${reportData.totalAcquisitionsCost.toFixed(2)}
+                          ${filteredTotalCost.toFixed(2)}
                         </td>
                       </tr>
                     </tbody>
@@ -417,6 +485,7 @@ export default function Reports() {
                         <th>Date</th>
                         <th>Category</th>
                         <th>Description</th>
+                        <th>Payment Method</th>
                         <th>Notes</th>
                         <th className="text-right">Amount</th>
                         <th className="text-right">USD</th>
@@ -427,9 +496,19 @@ export default function Reports() {
                         <tr key={exp.id}>
                           <td className="text-gray-400">{exp.date}</td>
                           <td>
-                            <span className="badge badge-info capitalize">{exp.category}</span>
+                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
+                              exp.category === 'shipping' ? 'bg-blue-500/20 text-blue-400' :
+                              exp.category === 'office' ? 'bg-purple-500/20 text-purple-400' :
+                              exp.category === 'utilities' ? 'bg-yellow-500/20 text-yellow-400' :
+                              exp.category === 'food' ? 'bg-green-500/20 text-green-400' :
+                              exp.category === 'travel' ? 'bg-orange-500/20 text-orange-400' :
+                              'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {exp.category}
+                            </span>
                           </td>
                           <td className="font-medium text-white">{exp.description}</td>
+                          <td className="text-gray-300">{exp.payment_method?.name || '-'}</td>
                           <td className="text-gray-500 text-sm">{exp.notes || '-'}</td>
                           <td className="text-right text-gray-300">
                             {formatCurrency(exp.amount, exp.currency)}
@@ -441,7 +520,7 @@ export default function Reports() {
                       ))}
                       {/* Total Row */}
                       <tr className="border-t-2 border-vault-border">
-                        <td colSpan={5} className="font-semibold text-white">TOTAL</td>
+                        <td colSpan={6} className="font-semibold text-white">TOTAL</td>
                         <td className="text-right font-bold text-purple-400 text-lg">
                           ${reportData.totalExpensesCost.toFixed(2)}
                         </td>
@@ -456,6 +535,33 @@ export default function Reports() {
           {/* Summary Tab */}
           {activeTab === 'summary' && (
             <div className="space-y-6">
+              {/* By Source Country */}
+              {Object.keys(reportData.byCountry).length > 0 && (
+                <div className="card">
+                  <h3 className="font-display text-lg font-semibold text-white mb-4">Acquisitions by Source Country</h3>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Country</th>
+                        <th className="text-right">Items</th>
+                        <th className="text-right">Total Spent (USD)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(reportData.byCountry)
+                        .sort((a, b) => b[1].total - a[1].total)
+                        .map(([name, data]) => (
+                          <tr key={name}>
+                            <td className="font-medium text-white">{name}</td>
+                            <td className="text-right">{data.count}</td>
+                            <td className="text-right text-vault-gold">${data.total.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
               {/* By Acquirer */}
               {Object.keys(reportData.byAcquirer).length > 0 && (
                 <div className="card">

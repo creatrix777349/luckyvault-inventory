@@ -102,6 +102,7 @@ export default function AddProduct() {
             >
               <option value="Pokemon">Pokemon</option>
               <option value="One Piece">One Piece</option>
+              <option value="Other">Other</option>
             </select>
           </div>
 

@@ -137,7 +137,7 @@ function HighValueCard({ item, onMove }) {
       <div>
         <h3 className="font-display text-lg font-semibold text-white mb-1">{item.card_name}</h3>
         <div className="flex items-center gap-2 mb-2">
-          <span className={`badge ${item.brand === 'Pokemon' ? 'badge-warning' : 'badge-info'}`}>{item.brand}</span>
+          <span className={`badge ${item.brand === 'Pokemon' ? 'badge-warning' : item.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'}`}>{item.brand}</span>
           <span className="text-gray-500 text-sm">{item.item_type}</span>
         </div>
         {item.grading_company && <p className="text-gray-400 text-sm mb-2">{item.grading_company} {item.grade}</p>}
@@ -232,6 +232,7 @@ function AddHighValueForm({ locations, vendors, users, onClose, onSuccess, addTo
                 <select name="brand" value={form.brand} onChange={handleChange} required>
                   <option value="Pokemon">Pokemon</option>
                   <option value="One Piece">One Piece</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
               <div>
