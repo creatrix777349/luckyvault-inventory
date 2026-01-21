@@ -111,7 +111,7 @@ export const fetchHighValueItems = async (status = null) => {
     .select(`
       *,
       location:locations(name),
-      acquirer:users(name),
+      acquirer:users!high_value_items_acquirer_id_fkey(name),
       vendor:vendors(name)
     `)
   
