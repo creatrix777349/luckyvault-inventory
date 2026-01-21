@@ -9,7 +9,7 @@ import {
   supabase
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { Star, Plus, Save, X, ArrowRightLeft, Camera, Upload } from 'lucide-react'
+import { Star, Plus, Save, X, ArrowRightLeft, Camera, Upload, TrendingUp, TrendingDown, Edit2 } from 'lucide-react'
 
 export default function HighValueTracking() {
   const { toasts, addToast, removeToast } = useToast()
@@ -46,6 +46,11 @@ export default function HighValueTracking() {
     }
   }
 
+  // Calculate totals
+  const totalPurchaseValue = items.reduce((sum, i) => sum + (i.purchase_price_usd || 0), 0)
+  const totalMarketValue = items.reduce((sum, i) => sum + (i.current_market_price || i.purchase_price_usd || 0), 0)
+  const profitLoss = totalMarketValue - totalPurchaseValue
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -79,9 +84,22 @@ export default function HighValueTracking() {
           <p className="font-display text-2xl font-bold text-white">{items.length}</p>
         </div>
         <div className="card">
-          <p className="text-gray-400 text-sm">Total Value</p>
+          <p className="text-gray-400 text-sm">Total Cost</p>
           <p className="font-display text-2xl font-bold text-vault-gold">
-            ${items.reduce((sum, i) => sum + (i.purchase_price_usd || 0), 0).toLocaleString()}
+            ${totalPurchaseValue.toLocaleString()}
+          </p>
+        </div>
+        <div className="card">
+          <p className="text-gray-400 text-sm">Market Value</p>
+          <p className="font-display text-2xl font-bold text-blue-400">
+            ${totalMarketValue.toLocaleString()}
+          </p>
+        </div>
+        <div className="card">
+          <p className="text-gray-400 text-sm">Profit/Loss</p>
+          <p className={`font-display text-2xl font-bold flex items-center gap-1 ${profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {profitLoss >= 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
+            ${Math.abs(profitLoss).toLocaleString()}
           </p>
         </div>
       </div>
@@ -92,9 +110,9 @@ export default function HighValueTracking() {
           <p className="text-gray-400">No high value items tracked yet</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {items.map(item => (
-            <HighValueCard key={item.id} item={item} onMove={() => setShowMoveModal(item)} />
+            <HighValueCard key={item.id} item={item} onMove={() => setShowMoveModal(item)} onUpdate={loadData} />
           ))}
         </div>
       )}
@@ -123,31 +141,107 @@ export default function HighValueTracking() {
   )
 }
 
-function HighValueCard({ item, onMove }) {
+function HighValueCard({ item, onMove, onUpdate }) {
+  const [editingMarket, setEditingMarket] = useState(false)
+  const [marketPrice, setMarketPrice] = useState(item.current_market_price || '')
+
+  const handleUpdateMarketPrice = async () => {
+    try {
+      await supabase
+        .from('high_value_items')
+        .update({ current_market_price: parseFloat(marketPrice) || null })
+        .eq('id', item.id)
+      setEditingMarket(false)
+      onUpdate()
+    } catch (error) {
+      console.error('Error updating market price:', error)
+    }
+  }
+
+  const priceDiff = (item.current_market_price || 0) - (item.purchase_price_usd || 0)
+  const hasMarketPrice = item.current_market_price != null
+
   return (
     <div className="card border-yellow-500/30 bg-gradient-to-br from-yellow-500/5 to-amber-600/5">
-      <div className="aspect-video bg-vault-dark rounded-lg mb-4 flex items-center justify-center overflow-hidden">
+      {/* Square thumbnail with object-contain */}
+      <div className="aspect-square bg-vault-dark rounded-lg mb-3 flex items-center justify-center overflow-hidden">
         {item.photo_url ? (
-          <img src={item.photo_url} alt={item.card_name} className="w-full h-full object-cover" />
+          <img src={item.photo_url} alt={item.card_name} className="w-full h-full object-contain" />
         ) : (
           <Camera className="text-gray-600" size={48} />
         )}
       </div>
       
       <div>
-        <h3 className="font-display text-lg font-semibold text-white mb-1">{item.card_name}</h3>
+        <h3 className="font-display text-base font-semibold text-white mb-1 truncate">{item.card_name}</h3>
+        
         <div className="flex items-center gap-2 mb-2">
-          <span className={`badge ${item.brand === 'Pokemon' ? 'badge-warning' : item.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'}`}>{item.brand}</span>
-          <span className="text-gray-500 text-sm">{item.item_type}</span>
+          <span className={`badge text-xs ${item.brand === 'Pokemon' ? 'badge-warning' : item.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'}`}>{item.brand}</span>
+          <span className="text-gray-500 text-xs">{item.item_type}</span>
         </div>
-        {item.grading_company && <p className="text-gray-400 text-sm mb-2">{item.grading_company} {item.grade}</p>}
-        <div className="flex justify-between items-center mt-4 pt-4 border-t border-vault-border">
-          <div>
-            <p className="text-vault-gold font-bold text-xl">${item.purchase_price_usd?.toLocaleString()}</p>
-            <p className="text-gray-500 text-xs">{item.location?.name}</p>
+        
+        {item.grading_company && (
+          <p className="text-gray-400 text-xs mb-2">{item.grading_company} {item.grade}</p>
+        )}
+        
+        {/* Date */}
+        <p className="text-gray-500 text-xs mb-3">Added: {item.date_added || 'N/A'}</p>
+        
+        {/* Pricing Section */}
+        <div className="border-t border-vault-border pt-3 space-y-2">
+          {/* Purchase Price */}
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400 text-xs">Paid:</span>
+            <span className="text-vault-gold font-semibold">${item.purchase_price_usd?.toLocaleString()}</span>
           </div>
-          <button onClick={onMove} className="btn btn-secondary text-sm py-2">
-            <ArrowRightLeft size={16} /> Move
+          
+          {/* Market Price */}
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400 text-xs">Market:</span>
+            {editingMarket ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={marketPrice}
+                  onChange={(e) => setMarketPrice(e.target.value)}
+                  className="w-20 text-sm py-1 px-2"
+                  placeholder="0"
+                />
+                <button onClick={handleUpdateMarketPrice} className="text-green-400 hover:text-green-300">
+                  <Save size={14} />
+                </button>
+                <button onClick={() => setEditingMarket(false)} className="text-gray-400 hover:text-white">
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1">
+                <span className="text-blue-400 font-semibold">
+                  {hasMarketPrice ? `$${item.current_market_price?.toLocaleString()}` : '-'}
+                </span>
+                <button onClick={() => setEditingMarket(true)} className="text-gray-500 hover:text-white">
+                  <Edit2 size={12} />
+                </button>
+              </div>
+            )}
+          </div>
+          
+          {/* Profit/Loss */}
+          {hasMarketPrice && (
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400 text-xs">P/L:</span>
+              <span className={`font-semibold text-sm ${priceDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {priceDiff >= 0 ? '+' : ''}{priceDiff.toLocaleString()}
+              </span>
+            </div>
+          )}
+        </div>
+        
+        {/* Location & Move Button */}
+        <div className="flex justify-between items-center mt-3 pt-3 border-t border-vault-border">
+          <p className="text-gray-500 text-xs truncate max-w-[60%]">{item.location?.name}</p>
+          <button onClick={onMove} className="btn btn-secondary text-xs py-1 px-2">
+            <ArrowRightLeft size={12} /> Move
           </button>
         </div>
       </div>
@@ -161,7 +255,7 @@ function AddHighValueForm({ locations, vendors, users, onClose, onSuccess, addTo
   const [photoPreview, setPhotoPreview] = useState(null)
   const [form, setForm] = useState({
     card_name: '', brand: 'Pokemon', item_type: 'Slab', grading_company: '', grade: '',
-    purchase_price: '', currency: 'USD', location_id: '', acquirer_id: '', vendor_id: '',
+    purchase_price: '', currency: 'USD', current_market_price: '', location_id: '', acquirer_id: '', vendor_id: '',
     date_added: new Date().toISOString().split('T')[0], notes: ''
   })
 
@@ -185,9 +279,12 @@ function AddHighValueForm({ locations, vendors, users, onClose, onSuccess, addTo
         }
       }
       await createHighValueItem({
-        ...form, purchase_price: parseFloat(form.purchase_price),
+        ...form, 
+        purchase_price: parseFloat(form.purchase_price),
         purchase_price_usd: parseFloat(form.purchase_price),
-        grade: form.grade ? parseFloat(form.grade) : null, photo_url: photoUrl
+        current_market_price: form.current_market_price ? parseFloat(form.current_market_price) : null,
+        grade: form.grade ? parseFloat(form.grade) : null, 
+        photo_url: photoUrl
       })
       onSuccess()
     } catch (error) {
@@ -227,6 +324,13 @@ function AddHighValueForm({ locations, vendors, users, onClose, onSuccess, addTo
                 <label className="block text-sm font-medium text-gray-300 mb-2">Card Name *</label>
                 <input type="text" name="card_name" value={form.card_name} onChange={handleChange} placeholder="e.g., Charizard VMAX Alt Art" required />
               </div>
+              
+              {/* Date Added */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Date Added *</label>
+                <input type="date" name="date_added" value={form.date_added} onChange={handleChange} required />
+              </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Brand *</label>
                 <select name="brand" value={form.brand} onChange={handleChange} required>
@@ -269,6 +373,13 @@ function AddHighValueForm({ locations, vendors, users, onClose, onSuccess, addTo
                   <option value="RMB">RMB</option>
                 </select>
               </div>
+              
+              {/* Current Market Price */}
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Current Market Price (USD)</label>
+                <input type="number" name="current_market_price" value={form.current_market_price} onChange={handleChange} min="0" step="0.01" placeholder="Optional - for P/L tracking" />
+              </div>
+              
               <div className="col-span-2">
                 <label className="block text-sm font-medium text-gray-300 mb-2">Location *</label>
                 <select name="location_id" value={form.location_id} onChange={handleChange} required>
