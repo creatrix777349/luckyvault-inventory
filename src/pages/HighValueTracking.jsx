@@ -11,6 +11,30 @@ import {
 import { ToastContainer, useToast } from '../components/Toast'
 import { Star, Plus, Save, X, ArrowRightLeft, Camera, Upload, TrendingUp, TrendingDown, Edit2 } from 'lucide-react'
 
+// Grade options for dropdown
+const GRADE_OPTIONS = [
+  { value: '1', label: '1' },
+  { value: '2', label: '2' },
+  { value: '3', label: '3' },
+  { value: '4', label: '4' },
+  { value: '5', label: '5' },
+  { value: '6', label: '6' },
+  { value: '7', label: '7' },
+  { value: '8', label: '8' },
+  { value: '9', label: '9' },
+  { value: '10', label: '10' },
+  { value: 'Pristine 10', label: 'Pristine 10' },
+  { value: 'Black Label 10', label: 'Black Label 10' }
+]
+
+// Item type options
+const ITEM_TYPES = [
+  { value: 'Single', label: 'Single ($100+)' },
+  { value: 'Slab $200-400', label: 'Slab ($200-400)' },
+  { value: 'Slab $400+', label: 'Slab ($400+)' },
+  { value: 'Other', label: 'Other' }
+]
+
 export default function HighValueTracking() {
   const { toasts, addToast, removeToast } = useToast()
   
@@ -69,7 +93,7 @@ export default function HighValueTracking() {
             <Star className="text-yellow-400" />
             High Value Tracking
           </h1>
-          <p className="text-gray-400 mt-1">$100+ singles and $400+ slabs</p>
+          <p className="text-gray-400 mt-1">$100+ singles and $200+ slabs</p>
         </div>
         
         <button onClick={() => setShowAddForm(true)} className="btn btn-primary">
@@ -143,7 +167,9 @@ export default function HighValueTracking() {
 
 function HighValueCard({ item, onMove, onUpdate }) {
   const [editingMarket, setEditingMarket] = useState(false)
+  const [editingPaid, setEditingPaid] = useState(false)
   const [marketPrice, setMarketPrice] = useState(item.current_market_price || '')
+  const [paidPrice, setPaidPrice] = useState(item.purchase_price_usd || '')
 
   const handleUpdateMarketPrice = async () => {
     try {
@@ -155,6 +181,23 @@ function HighValueCard({ item, onMove, onUpdate }) {
       onUpdate()
     } catch (error) {
       console.error('Error updating market price:', error)
+    }
+  }
+
+  const handleUpdatePaidPrice = async () => {
+    try {
+      const newPrice = parseFloat(paidPrice) || null
+      await supabase
+        .from('high_value_items')
+        .update({ 
+          purchase_price: newPrice,
+          purchase_price_usd: newPrice 
+        })
+        .eq('id', item.id)
+      setEditingPaid(false)
+      onUpdate()
+    } catch (error) {
+      console.error('Error updating paid price:', error)
     }
   }
 
@@ -189,13 +232,38 @@ function HighValueCard({ item, onMove, onUpdate }) {
         
         {/* Pricing Section */}
         <div className="border-t border-vault-border pt-3 space-y-2">
-          {/* Purchase Price */}
+          {/* Purchase Price - Editable */}
           <div className="flex justify-between items-center">
             <span className="text-gray-400 text-xs">Paid:</span>
-            <span className="text-vault-gold font-semibold">${item.purchase_price_usd?.toLocaleString()}</span>
+            {editingPaid ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={paidPrice}
+                  onChange={(e) => setPaidPrice(e.target.value)}
+                  className="w-20 text-sm py-1 px-2"
+                  placeholder="0"
+                />
+                <button onClick={handleUpdatePaidPrice} className="text-green-400 hover:text-green-300">
+                  <Save size={14} />
+                </button>
+                <button onClick={() => setEditingPaid(false)} className="text-gray-400 hover:text-white">
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1">
+                <span className="text-vault-gold font-semibold">
+                  {item.purchase_price_usd ? `$${item.purchase_price_usd.toLocaleString()}` : '-'}
+                </span>
+                <button onClick={() => setEditingPaid(true)} className="text-gray-500 hover:text-white">
+                  <Edit2 size={12} />
+                </button>
+              </div>
+            )}
           </div>
           
-          {/* Market Price */}
+          {/* Market Price - Editable */}
           <div className="flex justify-between items-center">
             <span className="text-gray-400 text-xs">Market:</span>
             {editingMarket ? (
@@ -227,7 +295,7 @@ function HighValueCard({ item, onMove, onUpdate }) {
           </div>
           
           {/* Profit/Loss */}
-          {hasMarketPrice && (
+          {hasMarketPrice && item.purchase_price_usd && (
             <div className="flex justify-between items-center">
               <span className="text-gray-400 text-xs">P/L:</span>
               <span className={`font-semibold text-sm ${priceDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -254,9 +322,19 @@ function AddHighValueForm({ locations, vendors, users, onClose, onSuccess, addTo
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [form, setForm] = useState({
-    card_name: '', brand: 'Pokemon', item_type: 'Slab', grading_company: '', grade: '',
-    purchase_price: '', currency: 'USD', current_market_price: '', location_id: '', acquirer_id: '', vendor_id: '',
-    date_added: new Date().toISOString().split('T')[0], notes: ''
+    card_name: '', 
+    brand: 'Pokemon', 
+    item_type: 'Slab $400+', 
+    grading_company: '', 
+    grade: '',
+    purchase_price: '', 
+    currency: 'USD', 
+    current_market_price: '', 
+    location_id: '', 
+    acquirer_id: '', 
+    vendor_id: '',
+    date_added: new Date().toISOString().split('T')[0], 
+    notes: ''
   })
 
   const handleChange = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
@@ -264,6 +342,8 @@ function AddHighValueForm({ locations, vendors, users, onClose, onSuccess, addTo
     const file = e.target.files[0]
     if (file) { setPhotoFile(file); setPhotoPreview(URL.createObjectURL(file)); }
   }
+
+  const isSlab = form.item_type.includes('Slab')
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -278,13 +358,25 @@ function AddHighValueForm({ locations, vendors, users, onClose, onSuccess, addTo
           photoUrl = urlData.publicUrl
         }
       }
+      
+      const purchasePrice = form.purchase_price ? parseFloat(form.purchase_price) : null
+      
       await createHighValueItem({
-        ...form, 
-        purchase_price: parseFloat(form.purchase_price),
-        purchase_price_usd: parseFloat(form.purchase_price),
+        card_name: form.card_name,
+        brand: form.brand,
+        item_type: form.item_type,
+        grading_company: form.grading_company || null,
+        grade: form.grade || null,
+        purchase_price: purchasePrice,
+        purchase_price_usd: purchasePrice,
+        currency: form.currency,
         current_market_price: form.current_market_price ? parseFloat(form.current_market_price) : null,
-        grade: form.grade ? parseFloat(form.grade) : null, 
-        photo_url: photoUrl
+        location_id: form.location_id,
+        acquirer_id: form.acquirer_id || null,
+        vendor_id: form.vendor_id || null,
+        date_added: form.date_added,
+        photo_url: photoUrl,
+        status: 'In Inventory'
       })
       onSuccess()
     } catch (error) {
@@ -339,14 +431,20 @@ function AddHighValueForm({ locations, vendors, users, onClose, onSuccess, addTo
                   <option value="Other">Other</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Type *</label>
+              
+              {/* Type with subheader */}
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-300 mb-1">Type *</label>
+                <p className="text-xs text-gray-500 mb-2">Current Market Price</p>
                 <select name="item_type" value={form.item_type} onChange={handleChange} required>
-                  <option value="Slab">Slab ($400+)</option>
-                  <option value="Single">Single ($100+)</option>
+                  {ITEM_TYPES.map(type => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
+                  ))}
                 </select>
               </div>
-              {form.item_type === 'Slab' && (<>
+              
+              {/* Grading fields - show for all Slab types */}
+              {isSlab && (<>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Grading Company</label>
                   <select name="grading_company" value={form.grading_company} onChange={handleChange}>
@@ -358,16 +456,23 @@ function AddHighValueForm({ locations, vendors, users, onClose, onSuccess, addTo
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Grade</label>
-                  <input type="number" name="grade" value={form.grade} onChange={handleChange} min="1" max="10" step="0.5" placeholder="e.g., 10" />
+                  <select name="grade" value={form.grade} onChange={handleChange}>
+                    <option value="">Select...</option>
+                    {GRADE_OPTIONS.map(g => (
+                      <option key={g.value} value={g.value}>{g.label}</option>
+                    ))}
+                  </select>
                 </div>
               </>)}
+              
+              {/* Purchase Price - now optional */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Purchase Price *</label>
-                <input type="number" name="purchase_price" value={form.purchase_price} onChange={handleChange} min="0" step="0.01" required />
+                <label className="block text-sm font-medium text-gray-300 mb-2">Purchase Price</label>
+                <input type="number" name="purchase_price" value={form.purchase_price} onChange={handleChange} min="0" step="0.01" placeholder="Optional" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Currency *</label>
-                <select name="currency" value={form.currency} onChange={handleChange} required>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Currency</label>
+                <select name="currency" value={form.currency} onChange={handleChange}>
                   <option value="USD">USD</option>
                   <option value="JPY">JPY</option>
                   <option value="RMB">RMB</option>
@@ -387,6 +492,8 @@ function AddHighValueForm({ locations, vendors, users, onClose, onSuccess, addTo
                   {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
                 </select>
               </div>
+              
+              {/* Acquirer - optional */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Acquirer</label>
                 <select name="acquirer_id" value={form.acquirer_id} onChange={handleChange}>
@@ -394,6 +501,8 @@ function AddHighValueForm({ locations, vendors, users, onClose, onSuccess, addTo
                   {users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
                 </select>
               </div>
+              
+              {/* Vendor - optional */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Vendor</label>
                 <select name="vendor_id" value={form.vendor_id} onChange={handleChange}>
