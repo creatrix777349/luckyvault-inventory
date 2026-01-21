@@ -17,6 +17,8 @@ const ALLOWED_LOCATION_NAMES = [
   'Stream Room - TikTok Whatnot',
   'Stream Room - Whatnot Rockets',
   'Front Store',
+  'Slab Room',
+  'Office Safe',
   'Other/Out'
 ]
 
