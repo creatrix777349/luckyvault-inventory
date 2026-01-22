@@ -3,10 +3,27 @@ import React, { useState, useEffect } from 'react'
 import { 
   fetchProducts, 
   fetchLocations,
-  updateInventory
+  updateInventoryManual,
+  supabase
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { PackagePlus, Save } from 'lucide-react'
+import { PackagePlus, Save, Star, AlertCircle } from 'lucide-react'
+
+// Grade options for slabs
+const GRADE_OPTIONS = [
+  { value: '1', label: '1' },
+  { value: '2', label: '2' },
+  { value: '3', label: '3' },
+  { value: '4', label: '4' },
+  { value: '5', label: '5' },
+  { value: '6', label: '6' },
+  { value: '7', label: '7' },
+  { value: '8', label: '8' },
+  { value: '9', label: '9' },
+  { value: '10', label: '10' },
+  { value: 'Pristine 10', label: 'Pristine 10' },
+  { value: 'Black Label 10', label: 'Black Label 10' }
+]
 
 export default function ManualInventory() {
   
@@ -20,8 +37,13 @@ export default function ManualInventory() {
   const [form, setForm] = useState({
     product_id: '',
     location_id: '',
-    quantity: '',
-    avg_cost_basis: ''
+    quantity: '1',
+    avg_cost_basis: '',
+    // Slab-specific fields
+    grading_company: '',
+    grade: '',
+    current_market_price: '',
+    card_name: '' // For custom slab name
   })
 
   const [productFilters, setProductFilters] = useState({
@@ -63,9 +85,35 @@ export default function ManualInventory() {
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target
-    setProductFilters(f => ({ ...f, [name]: value }))
-    setForm(f => ({ ...f, product_id: '' }))
+    setProductFilters(f => {
+      const updated = { ...f, [name]: value }
+      // Reset dependent filters when parent changes
+      if (name === 'brand') {
+        updated.type = ''
+        updated.language = ''
+      }
+      if (name === 'type') {
+        updated.language = ''
+      }
+      return updated
+    })
+    // Reset form fields that depend on filters
+    setForm(f => ({ 
+      ...f, 
+      product_id: '',
+      grading_company: '',
+      grade: '',
+      current_market_price: '',
+      card_name: ''
+    }))
   }
+
+  // Check if we should show slab-specific fields (Slab type selected)
+  const isSlab = productFilters.type === 'Slab'
+  
+  // Check if current market price indicates high value ($200+)
+  const currentMarketPriceNum = form.current_market_price ? parseFloat(form.current_market_price) : 0
+  const isHighValue = currentMarketPriceNum >= 200
 
   const filteredProducts = products.filter(p => {
     if (productFilters.brand && p.brand !== productFilters.brand) return false
@@ -87,23 +135,66 @@ export default function ManualInventory() {
       return
     }
 
+    // Validate grading company for slabs
+    if (isSlab && !form.grading_company) {
+      addToast('Please select a grading company for slabs', 'error')
+      return
+    }
+
     setSubmitting(true)
 
     try {
-      await updateInventory(
+      // Parse values - treat empty strings as null, not 0
+      const quantity = parseInt(form.quantity)
+      const avgCostBasis = form.avg_cost_basis !== '' ? parseFloat(form.avg_cost_basis) : null
+      const currentMarketPrice = form.current_market_price !== '' ? parseFloat(form.current_market_price) : null
+      
+      const selectedProduct = products.find(p => p.id === form.product_id)
+      
+      // Use the new function that handles null cost basis properly
+      await updateInventoryManual(
         form.product_id,
         form.location_id,
-        parseInt(form.quantity),
-        parseFloat(form.avg_cost_basis) || 0
+        quantity,
+        avgCostBasis,
+        {
+          grading_company: isSlab ? form.grading_company : null,
+          grade: isSlab ? form.grade : null,
+          current_market_price: currentMarketPrice,
+          is_high_value: isHighValue
+        }
       )
 
-      addToast('Inventory added successfully!')
+      // If it's high value ($200+) slab, also create an entry in high_value_items for detailed tracking
+      if (isHighValue && isSlab) {
+        await supabase.from('high_value_items').insert({
+          card_name: form.card_name || selectedProduct?.name || 'Unknown Slab',
+          brand: selectedProduct?.brand || productFilters.brand,
+          item_type: 'Slab',
+          grading_company: form.grading_company,
+          grade: form.grade,
+          purchase_price: avgCostBasis,
+          purchase_price_usd: avgCostBasis,
+          currency: 'USD',
+          current_market_price: currentMarketPrice,
+          location_id: form.location_id,
+          status: 'In Inventory',
+          date_added: new Date().toISOString().split('T')[0],
+          source: 'manual_inventory'
+        })
+      }
+
+      addToast(`Inventory added successfully!${isHighValue ? ' ⭐ High Value item tracked' : ''}`)
       
       setForm(f => ({
         ...f,
         product_id: '',
-        quantity: '',
-        avg_cost_basis: ''
+        quantity: '1',
+        avg_cost_basis: '',
+        grading_company: '',
+        grade: '',
+        current_market_price: '',
+        card_name: ''
       }))
     } catch (error) {
       console.error('Error adding inventory:', error)
@@ -135,7 +226,10 @@ export default function ManualInventory() {
 
       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6 max-w-2xl">
         <p className="text-yellow-400 text-sm">
-          <strong>Use this for:</strong> Adding inventory you already have on hand that wasn't tracked through the purchase system (e.g., initial inventory setup).
+          <strong>Use this for:</strong> Adding inventory you already have on hand that wasn't tracked through the purchase system (e.g., initial inventory setup, found items).
+        </p>
+        <p className="text-yellow-400/70 text-xs mt-2">
+          💡 Leave "Purchase Price" blank if unknown - it won't affect your cost averages.
         </p>
       </div>
 
@@ -193,6 +287,55 @@ export default function ManualInventory() {
             </div>
           </div>
 
+          {/* Slab-specific fields - Grading Company & Grade */}
+          {isSlab && (
+            <div className="grid grid-cols-2 gap-4 mb-4 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Grading Company *
+                </label>
+                <select
+                  name="grading_company"
+                  value={form.grading_company}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="">Select grading company...</option>
+                  <option value="PSA">PSA</option>
+                  <option value="CGC">CGC</option>
+                  <option value="Beckett">Beckett</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Grade
+                </label>
+                <select
+                  name="grade"
+                  value={form.grade}
+                  onChange={handleChange}
+                >
+                  <option value="">Select grade...</option>
+                  {GRADE_OPTIONS.map(g => (
+                    <option key={g.value} value={g.value}>{g.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Card Name (for tracking)
+                </label>
+                <input
+                  type="text"
+                  name="card_name"
+                  value={form.card_name}
+                  onChange={handleChange}
+                  placeholder="e.g., Charizard VMAX Alt Art"
+                />
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Product *
@@ -233,7 +376,8 @@ export default function ManualInventory() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Average Cost Basis (USD)
+              Purchase Price (USD)
+              <span className="text-gray-500 font-normal ml-1">- optional</span>
             </label>
             <input
               type="number"
@@ -242,10 +386,56 @@ export default function ManualInventory() {
               onChange={handleChange}
               min="0"
               step="0.01"
-              placeholder="0.00"
+              placeholder="Leave blank if unknown"
             />
+            <p className="text-gray-500 text-xs mt-1">
+              Won't affect cost averages if left blank
+            </p>
           </div>
         </div>
+
+        {/* Current Market Price - for slabs (optional) */}
+        {isSlab && (
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Current Market Price (USD)
+              <span className="text-gray-500 font-normal ml-1">- optional</span>
+              {isHighValue && (
+                <span className="ml-2 text-yellow-400 inline-flex items-center gap-1">
+                  <Star size={14} /> High Value
+                </span>
+              )}
+            </label>
+            <input
+              type="number"
+              name="current_market_price"
+              value={form.current_market_price}
+              onChange={handleChange}
+              min="0"
+              step="0.01"
+              placeholder="Enter current market price"
+            />
+            {isHighValue && (
+              <p className="text-yellow-400 text-xs mt-1 flex items-center gap-1">
+                <Star size={12} />
+                Items $200+ are marked as High Value and will display with a star
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* High Value Preview */}
+        {isHighValue && isSlab && (
+          <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg flex items-start gap-2">
+            <Star className="text-yellow-400 flex-shrink-0 mt-0.5" size={16} />
+            <div>
+              <p className="text-yellow-400 text-sm font-medium">High Value Item</p>
+              <p className="text-yellow-400/70 text-xs">
+                This item will be tracked in both regular inventory and High Value Tracking for detailed P/L monitoring.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="mt-6">
           <button 
@@ -259,6 +449,7 @@ export default function ManualInventory() {
               <>
                 <Save size={20} />
                 Add Inventory
+                {isHighValue && <Star size={16} className="ml-1" />}
               </>
             )}
           </button>
