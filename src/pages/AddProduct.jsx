@@ -240,7 +240,7 @@ export default function AddProduct() {
             ) : (
               <>
                 <Save size={20} />
-                Add Product
+                Add New Product
               </>
             )}
           </button>
