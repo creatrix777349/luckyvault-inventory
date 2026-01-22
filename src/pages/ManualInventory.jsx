@@ -7,7 +7,7 @@ import {
   supabase
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { PackagePlus, Save, Star, AlertCircle } from 'lucide-react'
+import { PackagePlus, Save, Star } from 'lucide-react'
 
 // Grade options for slabs
 const GRADE_OPTIONS = [
@@ -24,6 +24,15 @@ const GRADE_OPTIONS = [
   { value: 'Pristine 10', label: 'Pristine 10' },
   { value: 'Black Label 10', label: 'Black Label 10' }
 ]
+
+// Price bucket ranges for slabs
+const getPriceBucket = (price) => {
+  if (price >= 400) return '$400+'
+  if (price >= 200) return '$200-400'
+  if (price >= 100) return '$100-200'
+  if (price >= 50) return '$50-100'
+  return '$0-50'
+}
 
 export default function ManualInventory() {
   
@@ -43,7 +52,7 @@ export default function ManualInventory() {
     grading_company: '',
     grade: '',
     current_market_price: '',
-    card_name: '' // For custom slab name
+    card_name: ''
   })
 
   const [productFilters, setProductFilters] = useState({
@@ -97,7 +106,7 @@ export default function ManualInventory() {
       }
       return updated
     })
-    // Reset form fields that depend on filters
+    // Reset form fields
     setForm(f => ({ 
       ...f, 
       product_id: '',
@@ -108,13 +117,14 @@ export default function ManualInventory() {
     }))
   }
 
-  // Check if we should show slab-specific fields (Slab type selected)
+  // Check if we're adding a slab
   const isSlab = productFilters.type === 'Slab'
   
   // Check if current market price indicates high value ($200+)
   const currentMarketPriceNum = form.current_market_price ? parseFloat(form.current_market_price) : 0
   const isHighValue = currentMarketPriceNum >= 200
 
+  // For non-slabs, filter products normally
   const filteredProducts = products.filter(p => {
     if (productFilters.brand && p.brand !== productFilters.brand) return false
     if (productFilters.type && p.type !== productFilters.type) return false
@@ -122,12 +132,50 @@ export default function ManualInventory() {
     return true
   })
 
+  // Find the correct slab product based on grading company and price
+  const findSlabProduct = (brand, language, gradingCompany, price) => {
+    const priceBucket = getPriceBucket(price)
+    
+    // Look for product matching: brand, type=Slab, language, category=gradingCompany
+    // Product name format should include the price bucket
+    const matchingProduct = products.find(p => 
+      p.brand === brand &&
+      p.type === 'Slab' &&
+      p.language === language &&
+      p.category === gradingCompany &&
+      p.name.includes(priceBucket)
+    )
+    
+    return matchingProduct
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (!form.product_id || !form.location_id) {
-      addToast('Please select product and location', 'error')
-      return
+    // Validation for slabs
+    if (isSlab) {
+      if (!productFilters.brand || !productFilters.language) {
+        addToast('Please select brand and language', 'error')
+        return
+      }
+      if (!form.grading_company) {
+        addToast('Please select a grading company', 'error')
+        return
+      }
+      if (!form.card_name.trim()) {
+        addToast('Please enter the card name', 'error')
+        return
+      }
+      if (!form.current_market_price) {
+        addToast('Please enter the current market price', 'error')
+        return
+      }
+    } else {
+      // Validation for non-slabs
+      if (!form.product_id || !form.location_id) {
+        addToast('Please select product and location', 'error')
+        return
+      }
     }
 
     if (!form.quantity || parseInt(form.quantity) <= 0) {
@@ -135,57 +183,85 @@ export default function ManualInventory() {
       return
     }
 
-    // Validate grading company for slabs
-    if (isSlab && !form.grading_company) {
-      addToast('Please select a grading company for slabs', 'error')
+    if (!form.location_id) {
+      addToast('Please select a location', 'error')
       return
     }
 
     setSubmitting(true)
 
     try {
-      // Parse values - treat empty strings as null, not 0
       const quantity = parseInt(form.quantity)
       const avgCostBasis = form.avg_cost_basis !== '' ? parseFloat(form.avg_cost_basis) : null
       const currentMarketPrice = form.current_market_price !== '' ? parseFloat(form.current_market_price) : null
       
-      const selectedProduct = products.find(p => p.id === form.product_id)
-      
-      // Use the new function that handles null cost basis properly
-      await updateInventoryManual(
-        form.product_id,
-        form.location_id,
-        quantity,
-        avgCostBasis,
-        {
-          grading_company: isSlab ? form.grading_company : null,
-          grade: isSlab ? form.grade : null,
-          current_market_price: currentMarketPrice,
-          is_high_value: isHighValue
+      if (isSlab) {
+        // For slabs: find or identify the correct product bucket
+        const slabProduct = findSlabProduct(
+          productFilters.brand,
+          productFilters.language,
+          form.grading_company,
+          currentMarketPrice || 0
+        )
+        
+        if (!slabProduct) {
+          // Product doesn't exist - create a descriptive error
+          const priceBucket = getPriceBucket(currentMarketPrice || 0)
+          addToast(`No slab product found for ${productFilters.brand} ${form.grading_company} ${priceBucket} (${productFilters.language}). Please add it in Add Product first.`, 'error')
+          setSubmitting(false)
+          return
         }
-      )
 
-      // If it's high value ($200+) slab, also create an entry in high_value_items for detailed tracking
-      if (isHighValue && isSlab) {
-        await supabase.from('high_value_items').insert({
-          card_name: form.card_name || selectedProduct?.name || 'Unknown Slab',
-          brand: selectedProduct?.brand || productFilters.brand,
-          item_type: 'Slab',
-          grading_company: form.grading_company,
-          grade: form.grade,
-          purchase_price: avgCostBasis,
-          purchase_price_usd: avgCostBasis,
-          currency: 'USD',
-          current_market_price: currentMarketPrice,
-          location_id: form.location_id,
-          status: 'In Inventory',
-          date_added: new Date().toISOString().split('T')[0],
-          source: 'manual_inventory'
-        })
+        // Add to inventory with slab metadata
+        await updateInventoryManual(
+          slabProduct.id,
+          form.location_id,
+          quantity,
+          avgCostBasis,
+          {
+            grading_company: form.grading_company,
+            grade: form.grade,
+            current_market_price: currentMarketPrice,
+            is_high_value: isHighValue
+          }
+        )
+
+        // If high value ($200+), also add to high_value_items for detailed tracking
+        if (isHighValue) {
+          await supabase.from('high_value_items').insert({
+            card_name: form.card_name.trim(),
+            brand: productFilters.brand,
+            item_type: 'Slab',
+            grading_company: form.grading_company,
+            grade: form.grade,
+            purchase_price: avgCostBasis,
+            purchase_price_usd: avgCostBasis,
+            currency: 'USD',
+            current_market_price: currentMarketPrice,
+            location_id: form.location_id,
+            status: 'In Inventory',
+            date_added: new Date().toISOString().split('T')[0],
+            source: 'manual_inventory'
+          })
+        }
+
+        addToast(`Added: ${form.card_name} ${form.grading_company} ${form.grade}${isHighValue ? ' ⭐ High Value' : ''}`)
+        
+      } else {
+        // For non-slabs: use selected product
+        await updateInventoryManual(
+          form.product_id,
+          form.location_id,
+          quantity,
+          avgCostBasis,
+          {}
+        )
+        
+        const selectedProduct = products.find(p => p.id === form.product_id)
+        addToast(`Added: ${selectedProduct?.name || 'Product'}`)
       }
-
-      addToast(`Inventory added successfully!${isHighValue ? ' ⭐ High Value item tracked' : ''}`)
       
+      // Reset form
       setForm(f => ({
         ...f,
         product_id: '',
@@ -258,18 +334,18 @@ export default function ManualInventory() {
           
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Brand</label>
-              <select name="brand" value={productFilters.brand} onChange={handleFilterChange}>
-                <option value="">All Brands</option>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Brand *</label>
+              <select name="brand" value={productFilters.brand} onChange={handleFilterChange} required>
+                <option value="">Select Brand</option>
                 <option value="Pokemon">Pokemon</option>
                 <option value="One Piece">One Piece</option>
                 <option value="Other">Other</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
-              <select name="type" value={productFilters.type} onChange={handleFilterChange}>
-                <option value="">All Types</option>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Type *</label>
+              <select name="type" value={productFilters.type} onChange={handleFilterChange} required>
+                <option value="">Select Type</option>
                 <option value="Sealed">Sealed</option>
                 <option value="Pack">Pack</option>
                 <option value="Single">Single</option>
@@ -277,9 +353,9 @@ export default function ManualInventory() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Language</label>
-              <select name="language" value={productFilters.language} onChange={handleFilterChange}>
-                <option value="">All Languages</option>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Language *</label>
+              <select name="language" value={productFilters.language} onChange={handleFilterChange} required>
+                <option value="">Select Language</option>
                 <option value="EN">English</option>
                 <option value="JP">Japanese</option>
                 <option value="CN">Chinese</option>
@@ -287,43 +363,13 @@ export default function ManualInventory() {
             </div>
           </div>
 
-          {/* Slab-specific fields - Grading Company & Grade */}
-          {isSlab && (
-            <div className="grid grid-cols-2 gap-4 mb-4 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-              <div>
+          {/* SLAB ENTRY - Simplified like High Value form */}
+          {isSlab && productFilters.brand && productFilters.language && (
+            <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg mb-4">
+              {/* Card Name */}
+              <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Grading Company *
-                </label>
-                <select
-                  name="grading_company"
-                  value={form.grading_company}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="">Select grading company...</option>
-                  <option value="PSA">PSA</option>
-                  <option value="CGC">CGC</option>
-                  <option value="Beckett">Beckett</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Grade
-                </label>
-                <select
-                  name="grade"
-                  value={form.grade}
-                  onChange={handleChange}
-                >
-                  <option value="">Select grade...</option>
-                  {GRADE_OPTIONS.map(g => (
-                    <option key={g.value} value={g.value}>{g.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Card Name (for tracking)
+                  Card Name *
                 </label>
                 <input
                   type="text"
@@ -331,107 +377,157 @@ export default function ManualInventory() {
                   value={form.card_name}
                   onChange={handleChange}
                   placeholder="e.g., Charizard VMAX Alt Art"
+                  required
                 />
               </div>
+
+              {/* Grading Company & Grade */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Grading Company *
+                  </label>
+                  <select
+                    name="grading_company"
+                    value={form.grading_company}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="">Select...</option>
+                    <option value="PSA">PSA</option>
+                    <option value="CGC">CGC</option>
+                    <option value="Beckett">Beckett</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Grade
+                  </label>
+                  <select
+                    name="grade"
+                    value={form.grade}
+                    onChange={handleChange}
+                  >
+                    <option value="">Select...</option>
+                    {GRADE_OPTIONS.map(g => (
+                      <option key={g.value} value={g.value}>{g.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Current Market Price */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Current Market Price (USD) *
+                  {isHighValue && (
+                    <span className="ml-2 text-yellow-400 inline-flex items-center gap-1">
+                      <Star size={14} /> High Value
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  name="current_market_price"
+                  value={form.current_market_price}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  placeholder="Enter current market price"
+                  required
+                />
+                {form.current_market_price && (
+                  <p className="text-gray-500 text-xs mt-1">
+                    Will be sorted into: <span className="text-purple-400 font-medium">{getPriceBucket(parseFloat(form.current_market_price))}</span> bucket
+                  </p>
+                )}
+              </div>
+
+              {/* Preview */}
+              {form.card_name && form.grading_company && (
+                <div className="p-3 bg-vault-dark rounded-lg border border-vault-border">
+                  <p className="text-gray-400 text-xs mb-1">Preview:</p>
+                  <p className="text-white font-medium flex items-center gap-2">
+                    {isHighValue && <Star size={14} className="text-yellow-400" />}
+                    {form.card_name} <span className="text-purple-400">{form.grading_company} {form.grade}</span>
+                    {form.current_market_price && <span className="text-vault-gold">${parseFloat(form.current_market_price).toLocaleString()}</span>}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Product *
-            </label>
-            <select
-              name="product_id"
-              value={form.product_id}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select product...</option>
-              {filteredProducts
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map(product => (
-                <option key={product.id} value={product.id}>
-                  {product.brand} - {product.type} - {product.name} - {product.category} ({product.language})
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* NON-SLAB: Show product dropdown */}
+          {!isSlab && productFilters.brand && productFilters.type && productFilters.language && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Product *
+              </label>
+              <select
+                name="product_id"
+                value={form.product_id}
+                onChange={handleChange}
+                required
+              >
+                <option value="">Select product...</option>
+                {filteredProducts
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map(product => (
+                  <option key={product.id} value={product.id}>
+                    {product.name} - {product.category}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
-        {/* Quantity and Cost */}
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Quantity *
-            </label>
-            <input
-              type="number"
-              name="quantity"
-              value={form.quantity}
-              onChange={handleChange}
-              min="1"
-              placeholder="Enter quantity"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Purchase Price (USD)
-              <span className="text-gray-500 font-normal ml-1">- optional</span>
-            </label>
-            <input
-              type="number"
-              name="avg_cost_basis"
-              value={form.avg_cost_basis}
-              onChange={handleChange}
-              min="0"
-              step="0.01"
-              placeholder="Leave blank if unknown"
-            />
-            <p className="text-gray-500 text-xs mt-1">
-              Won't affect cost averages if left blank
-            </p>
-          </div>
-        </div>
-
-        {/* Current Market Price - for slabs (optional) */}
-        {isSlab && (
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Current Market Price (USD)
-              <span className="text-gray-500 font-normal ml-1">- optional</span>
-              {isHighValue && (
-                <span className="ml-2 text-yellow-400 inline-flex items-center gap-1">
-                  <Star size={14} /> High Value
-                </span>
-              )}
-            </label>
-            <input
-              type="number"
-              name="current_market_price"
-              value={form.current_market_price}
-              onChange={handleChange}
-              min="0"
-              step="0.01"
-              placeholder="Enter current market price"
-            />
-            {isHighValue && (
-              <p className="text-yellow-400 text-xs mt-1 flex items-center gap-1">
-                <Star size={12} />
-                Items $200+ are marked as High Value and will display with a star
+        {/* Quantity and Cost - show when we have enough info */}
+        {((isSlab && productFilters.brand && productFilters.language) || (!isSlab && form.product_id)) && (
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Quantity *
+              </label>
+              <input
+                type="number"
+                name="quantity"
+                value={form.quantity}
+                onChange={handleChange}
+                min="1"
+                placeholder="Enter quantity"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Purchase Price (USD)
+                <span className="text-gray-500 font-normal ml-1">- optional</span>
+              </label>
+              <input
+                type="number"
+                name="avg_cost_basis"
+                value={form.avg_cost_basis}
+                onChange={handleChange}
+                min="0"
+                step="0.01"
+                placeholder="Leave blank if unknown"
+              />
+              <p className="text-gray-500 text-xs mt-1">
+                Won't affect cost averages if left blank
               </p>
-            )}
+            </div>
           </div>
         )}
 
-        {/* High Value Preview */}
+        {/* High Value Notice */}
         {isHighValue && isSlab && (
           <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg flex items-start gap-2">
             <Star className="text-yellow-400 flex-shrink-0 mt-0.5" size={16} />
             <div>
               <p className="text-yellow-400 text-sm font-medium">High Value Item</p>
               <p className="text-yellow-400/70 text-xs">
-                This item will be tracked in both regular inventory and High Value Tracking for detailed P/L monitoring.
+                This item will also be tracked in High Value Tracking for detailed P/L monitoring.
               </p>
             </div>
           </div>
