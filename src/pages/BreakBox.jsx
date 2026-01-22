@@ -269,7 +269,7 @@ export default function BreakBox() {
               <option value="">Select product...</option>
               {inventory.map(inv => (
                 <option key={inv.id} value={inv.product_id}>
-                  {inv.product?.brand} - {inv.product?.name} ({inv.product?.language}) 
+                  {inv.product?.brand} - {inv.product?.category} - {inv.product?.name} ({inv.product?.language}) 
                   - {inv.quantity} available 
                   - {inv.product?.packs_per_box} packs/box
                 </option>
