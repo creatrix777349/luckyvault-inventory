@@ -4,22 +4,23 @@ import {
   fetchLocations,
   fetchInventory,
   createStorefrontSale,
-  updateInventory
+  supabase
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { DollarSign, Save } from 'lucide-react'
+import { DollarSign, Save, TrendingUp, TrendingDown } from 'lucide-react'
 
 export default function StorefrontSale() {
   const { toasts, addToast, removeToast } = useToast()
   
   const [products, setProducts] = useState([])
-  const [storefrontLocation, setStorefrontLocation] = useState(null)
+  const [locations, setLocations] = useState([])
   const [inventory, setInventory] = useState([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
   const [saleType, setSaleType] = useState('Bulk')
 
+  // Bulk sale form
   const [bulkForm, setBulkForm] = useState({
     date: new Date().toISOString().split('T')[0],
     brand: 'Pokemon',
@@ -28,17 +29,32 @@ export default function StorefrontSale() {
     sale_price: ''
   })
 
-  const [itemizedForm, setItemizedForm] = useState({
+  // Product sale form - similar to ManualInventory
+  const [productForm, setProductForm] = useState({
     date: new Date().toISOString().split('T')[0],
+    location_id: '',
     product_id: '',
     quantity: 1,
     sale_price: '',
     notes: ''
   })
 
+  const [productFilters, setProductFilters] = useState({
+    brand: '',
+    type: '',
+    language: ''
+  })
+
   useEffect(() => {
     loadData()
   }, [])
+
+  // Load inventory when location changes
+  useEffect(() => {
+    if (productForm.location_id) {
+      loadLocationInventory(productForm.location_id)
+    }
+  }, [productForm.location_id])
 
   const loadData = async () => {
     try {
@@ -47,13 +63,12 @@ export default function StorefrontSale() {
         fetchLocations('Physical')
       ])
       setProducts(productsData)
+      setLocations(locData)
       
-      const storefront = locData.find(l => l.name === 'Front Store')
-      setStorefrontLocation(storefront)
-      
-      if (storefront) {
-        const invData = await fetchInventory(storefront.id)
-        setInventory(invData)
+      // Default to Front Store if exists
+      const frontStore = locData.find(l => l.name === 'Front Store')
+      if (frontStore) {
+        setProductForm(f => ({ ...f, location_id: frontStore.id }))
       }
     } catch (error) {
       console.error('Error loading data:', error)
@@ -62,6 +77,43 @@ export default function StorefrontSale() {
       setLoading(false)
     }
   }
+
+  const loadLocationInventory = async (locationId) => {
+    try {
+      const invData = await fetchInventory(locationId)
+      setInventory(invData)
+    } catch (error) {
+      console.error('Error loading inventory:', error)
+    }
+  }
+
+  const handleProductFormChange = (e) => {
+    const { name, value } = e.target
+    setProductForm(f => ({ ...f, [name]: value }))
+  }
+
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target
+    setProductFilters(f => ({ ...f, [name]: value }))
+    setProductForm(f => ({ ...f, product_id: '' }))
+  }
+
+  // Filter inventory based on product filters
+  const filteredInventory = inventory.filter(inv => {
+    if (!inv.product) return false
+    if (productFilters.brand && inv.product.brand !== productFilters.brand) return false
+    if (productFilters.type && inv.product.type !== productFilters.type) return false
+    if (productFilters.language && inv.product.language !== productFilters.language) return false
+    return inv.quantity > 0 // Only show items with stock
+  })
+
+  // Get selected inventory item
+  const selectedInventory = inventory.find(inv => inv.product_id === productForm.product_id)
+  
+  // Calculate profit
+  const estimatedProfit = productForm.sale_price && selectedInventory
+    ? parseFloat(productForm.sale_price) - (selectedInventory.avg_cost_basis * parseInt(productForm.quantity || 0))
+    : null
 
   const handleBulkSubmit = async (e) => {
     e.preventDefault()
@@ -81,7 +133,7 @@ export default function StorefrontSale() {
         product_type: bulkForm.product_type,
         quantity: parseInt(bulkForm.quantity),
         sale_price: parseFloat(bulkForm.sale_price),
-        created_by: profile?.id
+        created_by: null
       })
 
       addToast('Bulk sale logged successfully!')
@@ -99,21 +151,22 @@ export default function StorefrontSale() {
     }
   }
 
-  const handleItemizedSubmit = async (e) => {
+  const handleProductSubmit = async (e) => {
     e.preventDefault()
     
-    if (!itemizedForm.product_id) {
+    if (!productForm.product_id) {
       addToast('Please select a product', 'error')
       return
     }
     
-    if (!itemizedForm.sale_price || parseFloat(itemizedForm.sale_price) <= 0) {
+    if (!productForm.sale_price || parseFloat(productForm.sale_price) <= 0) {
       addToast('Please enter a valid sale price', 'error')
       return
     }
 
-    const selectedInventory = inventory.find(inv => inv.product_id === itemizedForm.product_id)
-    if (!selectedInventory || selectedInventory.quantity < parseInt(itemizedForm.quantity)) {
+    const qty = parseInt(productForm.quantity)
+    
+    if (!selectedInventory || selectedInventory.quantity < qty) {
       addToast('Not enough inventory', 'error')
       return
     }
@@ -121,35 +174,46 @@ export default function StorefrontSale() {
     setSubmitting(true)
 
     try {
-      const qty = parseInt(itemizedForm.quantity)
-      const salePrice = parseFloat(itemizedForm.sale_price)
-      const costBasis = selectedInventory.avg_cost_basis * qty
+      const salePrice = parseFloat(productForm.sale_price)
+      const costBasis = (selectedInventory.avg_cost_basis || 0) * qty
       const profit = salePrice - costBasis
 
+      // Log the sale
       await createStorefrontSale({
-        date: itemizedForm.date,
-        sale_type: 'Itemized',
-        product_id: itemizedForm.product_id,
+        date: productForm.date,
+        sale_type: 'Product',
+        product_id: productForm.product_id,
+        location_id: productForm.location_id,
         quantity: qty,
         sale_price: salePrice,
         cost_basis: costBasis,
         profit: profit,
-        notes: itemizedForm.notes,
-        created_by: profile?.id
+        notes: productForm.notes,
+        created_by: null
       })
 
-      // Update inventory
-      if (storefrontLocation) {
-        await updateInventory(
-          itemizedForm.product_id,
-          storefrontLocation.id,
-          -qty
-        )
+      // Subtract from inventory
+      const newQuantity = selectedInventory.quantity - qty
+      
+      if (newQuantity <= 0) {
+        // Delete inventory record if quantity is 0
+        await supabase
+          .from('inventory')
+          .delete()
+          .eq('id', selectedInventory.id)
+      } else {
+        // Update quantity
+        await supabase
+          .from('inventory')
+          .update({ quantity: newQuantity })
+          .eq('id', selectedInventory.id)
       }
 
-      addToast(`Sale logged! Profit: $${profit.toFixed(2)}`)
+      const profitText = profit >= 0 ? `+$${profit.toFixed(2)}` : `-$${Math.abs(profit).toFixed(2)}`
+      addToast(`Sale logged! Profit: ${profitText}`)
       
-      setItemizedForm(f => ({
+      // Reset form
+      setProductForm(f => ({
         ...f,
         product_id: '',
         quantity: 1,
@@ -158,10 +222,7 @@ export default function StorefrontSale() {
       }))
       
       // Reload inventory
-      if (storefrontLocation) {
-        const invData = await fetchInventory(storefrontLocation.id)
-        setInventory(invData)
-      }
+      loadLocationInventory(productForm.location_id)
     } catch (error) {
       console.error('Error logging sale:', error)
       addToast('Failed to log sale', 'error')
@@ -169,11 +230,6 @@ export default function StorefrontSale() {
       setSubmitting(false)
     }
   }
-
-  const selectedInventory = inventory.find(inv => inv.product_id === itemizedForm.product_id)
-  const estimatedProfit = itemizedForm.sale_price && selectedInventory
-    ? parseFloat(itemizedForm.sale_price) - (selectedInventory.avg_cost_basis * parseInt(itemizedForm.quantity || 0))
-    : null
 
   if (loading) {
     return (
@@ -208,21 +264,22 @@ export default function StorefrontSale() {
           Bulk Sale
         </button>
         <button
-          onClick={() => setSaleType('Itemized')}
+          onClick={() => setSaleType('Product')}
           className={`px-4 py-2 rounded-lg font-medium transition-all ${
-            saleType === 'Itemized'
+            saleType === 'Product'
               ? 'bg-vault-gold text-vault-dark'
               : 'bg-vault-surface text-gray-400 hover:text-white'
           }`}
         >
-          Itemized ($100+ singles, $400+ slabs)
+          Sealed & Product Sales
         </button>
       </div>
 
       {saleType === 'Bulk' ? (
+        /* BULK SALE FORM */
         <form onSubmit={handleBulkSubmit} className="card max-w-xl">
           <p className="text-gray-400 text-sm mb-4">
-            For quick bulk sales - no cost basis tracking
+            For quick bulk sales of unlisted items - no inventory tracking
           </p>
           
           <div className="grid grid-cols-2 gap-4">
@@ -244,6 +301,7 @@ export default function StorefrontSale() {
               >
                 <option value="Pokemon">Pokemon</option>
                 <option value="One Piece">One Piece</option>
+                <option value="Other">Other</option>
               </select>
             </div>
             <div>
@@ -293,90 +351,174 @@ export default function StorefrontSale() {
           </button>
         </form>
       ) : (
-        <form onSubmit={handleItemizedSubmit} className="card max-w-xl">
+        /* PRODUCT SALE FORM - Similar to ManualInventory but subtracts */
+        <form onSubmit={handleProductSubmit} className="card max-w-2xl">
           <p className="text-gray-400 text-sm mb-4">
-            For high-value items - tracks cost basis and profit
+            For tracked inventory items - subtracts from stock and calculates profit
           </p>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-300 mb-2">Date *</label>
-              <input
-                type="date"
-                value={itemizedForm.date}
-                onChange={(e) => setItemizedForm(f => ({ ...f, date: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-300 mb-2">Product * (from storefront inventory)</label>
-              <select
-                value={itemizedForm.product_id}
-                onChange={(e) => setItemizedForm(f => ({ ...f, product_id: e.target.value }))}
-                required
-              >
-                <option value="">Select product...</option>
-                {inventory
-                  .sort((a, b) => (a.product?.name || '').localeCompare(b.product?.name || ''))
-                  .map(inv => (
-                  <option key={inv.id} value={inv.product_id}>
-                    {inv.product?.brand} - {inv.product?.type} - {inv.product?.name} - {inv.product?.category} ({inv.product?.language}) - {inv.quantity} avail
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Quantity *</label>
-              <input
-                type="number"
-                value={itemizedForm.quantity}
-                onChange={(e) => setItemizedForm(f => ({ ...f, quantity: e.target.value }))}
-                min="1"
-                max={selectedInventory?.quantity || 1}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Sale Price ($) *</label>
-              <input
-                type="number"
-                value={itemizedForm.sale_price}
-                onChange={(e) => setItemizedForm(f => ({ ...f, sale_price: e.target.value }))}
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                required
-              />
-            </div>
+          {/* Date */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-300 mb-2">Date *</label>
+            <input
+              type="date"
+              name="date"
+              value={productForm.date}
+              onChange={handleProductFormChange}
+              required
+            />
           </div>
 
-          {estimatedProfit !== null && (
-            <div className={`mt-4 p-3 rounded-lg ${estimatedProfit >= 0 ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
-              <div className="flex justify-between">
-                <span className="text-gray-300">Estimated Profit:</span>
-                <span className={`font-bold ${estimatedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  ${estimatedProfit.toFixed(2)}
-                </span>
+          {/* Location */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-300 mb-2">Selling From *</label>
+            <select
+              name="location_id"
+              value={productForm.location_id}
+              onChange={handleProductFormChange}
+              required
+            >
+              <option value="">Select location...</option>
+              {locations.map(loc => (
+                <option key={loc.id} value={loc.id}>{loc.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Product Selection */}
+          {productForm.location_id && (
+            <div className="pt-4 border-t border-vault-border">
+              <h3 className="font-display text-lg font-semibold text-white mb-4">Product Selection</h3>
+              
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Brand</label>
+                  <select name="brand" value={productFilters.brand} onChange={handleFilterChange}>
+                    <option value="">All Brands</option>
+                    <option value="Pokemon">Pokemon</option>
+                    <option value="One Piece">One Piece</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
+                  <select name="type" value={productFilters.type} onChange={handleFilterChange}>
+                    <option value="">All Types</option>
+                    <option value="Sealed">Sealed</option>
+                    <option value="Pack">Pack</option>
+                    <option value="Single">Single</option>
+                    <option value="Slab">Slab</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Language</label>
+                  <select name="language" value={productFilters.language} onChange={handleFilterChange}>
+                    <option value="">All Languages</option>
+                    <option value="EN">English</option>
+                    <option value="JP">Japanese</option>
+                    <option value="CN">Chinese</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Product Dropdown */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Product *</label>
+                <select
+                  name="product_id"
+                  value={productForm.product_id}
+                  onChange={handleProductFormChange}
+                  required
+                >
+                  <option value="">Select product...</option>
+                  {filteredInventory
+                    .sort((a, b) => (a.product?.name || '').localeCompare(b.product?.name || ''))
+                    .map(inv => (
+                    <option key={inv.id} value={inv.product_id}>
+                      {inv.product?.brand} - {inv.product?.type} - {inv.product?.name} - {inv.product?.category} ({inv.product?.language}) - {inv.quantity} avail @ ${inv.avg_cost_basis?.toFixed(2) || '0.00'}/ea
+                    </option>
+                  ))}
+                </select>
+                {filteredInventory.length === 0 && (
+                  <p className="text-yellow-400 text-xs mt-1">No inventory at this location matching filters</p>
+                )}
+              </div>
+
+              {/* Quantity and Sale Price */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Quantity *</label>
+                  <input
+                    type="number"
+                    name="quantity"
+                    value={productForm.quantity}
+                    onChange={handleProductFormChange}
+                    min="1"
+                    max={selectedInventory?.quantity || 1}
+                    required
+                  />
+                  {selectedInventory && (
+                    <p className="text-gray-500 text-xs mt-1">
+                      {selectedInventory.quantity} available
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Sale Price ($) *</label>
+                  <input
+                    type="number"
+                    name="sale_price"
+                    value={productForm.sale_price}
+                    onChange={handleProductFormChange}
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Profit Preview */}
+              {estimatedProfit !== null && (
+                <div className={`mt-4 p-3 rounded-lg flex items-center justify-between ${
+                  estimatedProfit >= 0 
+                    ? 'bg-green-500/10 border border-green-500/30' 
+                    : 'bg-red-500/10 border border-red-500/30'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {estimatedProfit >= 0 ? (
+                      <TrendingUp className="text-green-400" size={20} />
+                    ) : (
+                      <TrendingDown className="text-red-400" size={20} />
+                    )}
+                    <span className="text-gray-300">Estimated Profit:</span>
+                  </div>
+                  <span className={`font-bold text-lg ${estimatedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {estimatedProfit >= 0 ? '+' : '-'}${Math.abs(estimatedProfit).toFixed(2)}
+                  </span>
+                </div>
+              )}
+
+              {/* Notes */}
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Notes</label>
+                <textarea
+                  name="notes"
+                  value={productForm.notes}
+                  onChange={handleProductFormChange}
+                  rows={2}
+                  placeholder="Optional notes..."
+                />
               </div>
             </div>
           )}
 
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-300 mb-2">Notes</label>
-            <textarea
-              value={itemizedForm.notes}
-              onChange={(e) => setItemizedForm(f => ({ ...f, notes: e.target.value }))}
-              rows={2}
-              placeholder="Optional notes..."
-            />
-          </div>
-
           <button 
             type="submit" 
             className="btn btn-primary w-full mt-6"
-            disabled={submitting || !itemizedForm.product_id}
+            disabled={submitting || !productForm.product_id || !productForm.location_id}
           >
-            {submitting ? <div className="spinner w-5 h-5 border-2"></div> : <><Save size={20} /> Log Itemized Sale</>}
+            {submitting ? <div className="spinner w-5 h-5 border-2"></div> : <><Save size={20} /> Log Sale</>}
           </button>
         </form>
       )}
