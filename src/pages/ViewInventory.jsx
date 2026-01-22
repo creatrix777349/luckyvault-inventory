@@ -162,6 +162,7 @@ export default function ViewInventory() {
           </span>
         </td>
         <td className="text-gray-400">{inv.product?.type}</td>
+        <td className="text-gray-400">{inv.product?.category}</td>
         <td className="text-gray-400">{inv.product?.language}</td>
         <td className="text-right">
           {isEditing ? (
@@ -360,7 +361,8 @@ export default function ViewInventory() {
                         <th>Product</th>
                         <th>Brand</th>
                         <th>Type</th>
-                        <th>Language</th>
+                        <th>Category</th>
+                        <th>Lang</th>
                         <th className="text-right">Qty</th>
                         <th className="text-right">Avg Cost</th>
                         <th className="text-right">Total Value</th>
@@ -384,6 +386,7 @@ export default function ViewInventory() {
                             </span>
                           </td>
                           <td className="text-gray-400">{item.item_type}</td>
+                          <td className="text-gray-400">High Value</td>
                           <td className="text-gray-400">-</td>
                           <td className="text-right font-medium">1</td>
                           <td className="text-right text-gray-400">${item.purchase_price_usd?.toFixed(2) || '-'}</td>
@@ -415,7 +418,8 @@ export default function ViewInventory() {
                   <th>Product</th>
                   <th>Brand</th>
                   <th>Type</th>
-                  <th>Language</th>
+                  <th>Category</th>
+                  <th>Lang</th>
                   <th className="text-right">Qty</th>
                   <th className="text-right">Avg Cost</th>
                   <th className="text-right">Total Value</th>
@@ -439,6 +443,7 @@ export default function ViewInventory() {
                       </span>
                     </td>
                     <td className="text-gray-400">{item.item_type}</td>
+                    <td className="text-gray-400">High Value</td>
                     <td className="text-gray-400">-</td>
                     <td className="text-right font-medium">1</td>
                     <td className="text-right text-gray-400">${item.purchase_price_usd?.toFixed(2) || '-'}</td>
