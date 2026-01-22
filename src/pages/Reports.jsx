@@ -1,13 +1,13 @@
 import React, { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { BarChart3, Calendar, CalendarRange, CalendarDays, ShoppingCart, Receipt, FileText, Filter } from 'lucide-react'
+import { BarChart3, Calendar, CalendarRange, CalendarDays, ShoppingCart, Receipt, FileText, Filter, ClipboardList } from 'lucide-react'
 
 export default function Reports() {
   const { toasts, addToast, removeToast } = useToast()
   
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState('acquisitions') // 'acquisitions', 'expenses', 'summary'
+  const [activeTab, setActiveTab] = useState('stream_counts') // 'stream_counts', 'acquisitions', 'expenses', 'summary'
   const [dateMode, setDateMode] = useState('single') // 'single', 'range', 'weekly'
   const [singleDate, setSingleDate] = useState(new Date().toISOString().split('T')[0])
   const [startDate, setStartDate] = useState('')
@@ -81,6 +81,48 @@ export default function Reports() {
         console.log('Business expenses table may not exist yet')
       }
 
+      // Fetch stream counts
+      let streamCounts = []
+      let streamCountItems = []
+      try {
+        const startDateTime = `${start}T00:00:00`
+        const endDateTime = `${end}T23:59:59`
+        
+        const { data: countsData, error: countsError } = await supabase
+          .from('stream_counts')
+          .select(`
+            *,
+            location:locations(name),
+            streamer:users!stream_counts_streamer_id_fkey(name),
+            counted_by:users!stream_counts_counted_by_id_fkey(name)
+          `)
+          .gte('count_time', startDateTime)
+          .lte('count_time', endDateTime)
+          .order('count_time', { ascending: false })
+        
+        if (countsData && !countsError) {
+          streamCounts = countsData
+          
+          // Fetch all items for these counts
+          if (countsData.length > 0) {
+            const countIds = countsData.map(c => c.id)
+            const { data: itemsData, error: itemsError } = await supabase
+              .from('stream_count_items')
+              .select(`
+                *,
+                product:products(name, brand, type)
+              `)
+              .in('stream_count_id', countIds)
+            
+            if (itemsData && !itemsError) {
+              streamCountItems = itemsData
+            }
+          }
+        }
+      } catch (e) {
+        console.log('Stream counts tables may not exist yet')
+      }
+
       // Get unique source countries for filter dropdown
       const countries = [...new Set(acquisitions?.map(a => a.source_country).filter(Boolean))]
 
@@ -88,6 +130,42 @@ export default function Reports() {
       const totalAcquisitionsCost = acquisitions?.reduce((sum, a) => sum + (a.cost_usd || 0), 0) || 0
       const totalExpensesCost = expenses?.reduce((sum, e) => sum + (e.amount_usd || 0), 0) || 0
       const totalItems = acquisitions?.reduce((sum, a) => sum + (a.quantity_purchased || 0), 0) || 0
+
+      // Stream counts totals
+      const totalUnitsSold = streamCounts.reduce((sum, c) => sum + (c.total_sold || 0), 0)
+      const totalDiscrepancies = streamCounts.reduce((sum, c) => sum + (c.total_discrepancies || 0), 0)
+
+      // Group stream counts by streamer
+      const salesByStreamer = streamCounts.reduce((acc, c) => {
+        const name = c.streamer?.name || 'Unknown'
+        if (!acc[name]) acc[name] = { counts: 0, sold: 0, discrepancies: 0 }
+        acc[name].counts += 1
+        acc[name].sold += c.total_sold || 0
+        acc[name].discrepancies += c.total_discrepancies || 0
+        return acc
+      }, {})
+
+      // Group stream counts by room
+      const salesByRoom = streamCounts.reduce((acc, c) => {
+        const name = c.location?.name?.replace('Stream Room - ', '') || 'Unknown'
+        if (!acc[name]) acc[name] = { counts: 0, sold: 0, discrepancies: 0 }
+        acc[name].counts += 1
+        acc[name].sold += c.total_sold || 0
+        acc[name].discrepancies += c.total_discrepancies || 0
+        return acc
+      }, {})
+
+      // Group sold items by product
+      const soldByProduct = streamCountItems
+        .filter(item => item.difference < 0)
+        .reduce((acc, item) => {
+          const name = item.product?.name || 'Unknown'
+          const brand = item.product?.brand || 'Unknown'
+          const key = `${brand}|${name}`
+          if (!acc[key]) acc[key] = { name, brand, sold: 0 }
+          acc[key].sold += Math.abs(item.difference)
+          return acc
+        }, {})
 
       // Group acquisitions by acquirer for summary
       const byAcquirer = acquisitions?.reduce((acc, a) => {
@@ -129,11 +207,18 @@ export default function Reports() {
         dateRange: { start, end },
         acquisitions: acquisitions || [],
         expenses: expenses || [],
+        streamCounts,
+        streamCountItems,
         countries,
         totalAcquisitionsCost,
         totalExpensesCost,
         grandTotal: totalAcquisitionsCost + totalExpensesCost,
         totalItems,
+        totalUnitsSold,
+        totalDiscrepancies,
+        salesByStreamer,
+        salesByRoom,
+        soldByProduct,
         byAcquirer,
         byBrand,
         byCountry,
@@ -300,7 +385,14 @@ export default function Reports() {
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div className="card">
+              <p className="text-gray-400 text-sm">Units Sold</p>
+              <p className="font-display text-2xl font-bold text-green-400">
+                {reportData.totalUnitsSold?.toLocaleString() || 0}
+              </p>
+              <p className="text-gray-500 text-xs">{reportData.streamCounts?.length || 0} counts</p>
+            </div>
             <div className="card">
               <p className="text-gray-400 text-sm">Acquisitions</p>
               <p className="font-display text-2xl font-bold text-vault-gold">
@@ -316,21 +408,33 @@ export default function Reports() {
               <p className="text-gray-500 text-xs">{reportData.expenses.length} entries</p>
             </div>
             <div className="card">
-              <p className="text-gray-400 text-sm">Grand Total</p>
+              <p className="text-gray-400 text-sm">Total Spent</p>
               <p className="font-display text-2xl font-bold text-white">
                 ${reportData.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </p>
             </div>
             <div className="card">
-              <p className="text-gray-400 text-sm">Transactions</p>
-              <p className="font-display text-2xl font-bold text-blue-400">
-                {reportData.acquisitions.length + reportData.expenses.length}
+              <p className="text-gray-400 text-sm">Discrepancies</p>
+              <p className={`font-display text-2xl font-bold ${reportData.totalDiscrepancies > 0 ? 'text-amber-400' : 'text-gray-500'}`}>
+                {reportData.totalDiscrepancies || 0}
               </p>
+              <p className="text-gray-500 text-xs">needs review</p>
             </div>
           </div>
 
           {/* Report Tabs */}
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2 mb-4 flex-wrap">
+            <button
+              onClick={() => setActiveTab('stream_counts')}
+              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all ${
+                activeTab === 'stream_counts'
+                  ? 'bg-vault-gold text-vault-dark'
+                  : 'bg-vault-surface text-gray-400 hover:text-white'
+              }`}
+            >
+              <ClipboardList size={18} />
+              Stream Counts ({reportData.streamCounts?.length || 0})
+            </button>
             <button
               onClick={() => setActiveTab('acquisitions')}
               className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all ${
@@ -365,6 +469,174 @@ export default function Reports() {
               Summary
             </button>
           </div>
+
+          {/* Stream Counts Tab */}
+          {activeTab === 'stream_counts' && (
+            <div className="space-y-6">
+              {/* Sales by Streamer */}
+              {Object.keys(reportData.salesByStreamer || {}).length > 0 && (
+                <div className="card">
+                  <h3 className="font-display text-lg font-semibold text-white mb-4">Sales by Streamer</h3>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Streamer</th>
+                        <th className="text-right">Counts</th>
+                        <th className="text-right">Units Sold</th>
+                        <th className="text-right">Discrepancies</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(reportData.salesByStreamer)
+                        .sort((a, b) => b[1].sold - a[1].sold)
+                        .map(([name, data]) => (
+                          <tr key={name}>
+                            <td className="font-medium text-white">{name}</td>
+                            <td className="text-right text-gray-400">{data.counts}</td>
+                            <td className="text-right text-green-400 font-medium">{data.sold}</td>
+                            <td className="text-right">
+                              {data.discrepancies > 0 ? (
+                                <span className="text-amber-400">+{data.discrepancies}</span>
+                              ) : (
+                                <span className="text-gray-500">0</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      <tr className="border-t-2 border-vault-border">
+                        <td className="font-semibold text-white">TOTAL</td>
+                        <td className="text-right font-semibold text-gray-400">
+                          {Object.values(reportData.salesByStreamer).reduce((sum, d) => sum + d.counts, 0)}
+                        </td>
+                        <td className="text-right font-bold text-green-400 text-lg">
+                          {reportData.totalUnitsSold}
+                        </td>
+                        <td className="text-right font-medium text-amber-400">
+                          {reportData.totalDiscrepancies > 0 ? `+${reportData.totalDiscrepancies}` : '0'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Sales by Room */}
+              {Object.keys(reportData.salesByRoom || {}).length > 0 && (
+                <div className="card">
+                  <h3 className="font-display text-lg font-semibold text-white mb-4">Sales by Stream Room</h3>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Room</th>
+                        <th className="text-right">Counts</th>
+                        <th className="text-right">Units Sold</th>
+                        <th className="text-right">Discrepancies</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(reportData.salesByRoom)
+                        .sort((a, b) => b[1].sold - a[1].sold)
+                        .map(([name, data]) => (
+                          <tr key={name}>
+                            <td className="font-medium text-white">{name}</td>
+                            <td className="text-right text-gray-400">{data.counts}</td>
+                            <td className="text-right text-green-400 font-medium">{data.sold}</td>
+                            <td className="text-right">
+                              {data.discrepancies > 0 ? (
+                                <span className="text-amber-400">+{data.discrepancies}</span>
+                              ) : (
+                                <span className="text-gray-500">0</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Top Selling Products */}
+              {Object.keys(reportData.soldByProduct || {}).length > 0 && (
+                <div className="card">
+                  <h3 className="font-display text-lg font-semibold text-white mb-4">Products Sold</h3>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th>Brand</th>
+                        <th className="text-right">Units Sold</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.values(reportData.soldByProduct)
+                        .sort((a, b) => b.sold - a.sold)
+                        .map((item, idx) => (
+                          <tr key={idx}>
+                            <td className="font-medium text-white">{item.name}</td>
+                            <td>
+                              <span className={`badge ${item.brand === 'Pokemon' ? 'badge-warning' : 'badge-info'}`}>
+                                {item.brand}
+                              </span>
+                            </td>
+                            <td className="text-right text-green-400 font-medium">{item.sold}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Individual Count Records */}
+              <div className="card">
+                <h3 className="font-display text-lg font-semibold text-white mb-4">Count Records</h3>
+                {(reportData.streamCounts?.length || 0) === 0 ? (
+                  <p className="text-gray-400 text-center py-8">No stream counts in this period</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Time</th>
+                          <th>Room</th>
+                          <th>Streamer</th>
+                          <th>Counted By</th>
+                          <th className="text-right">Sold</th>
+                          <th className="text-right">Discrepancy</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.streamCounts.map(count => (
+                          <tr key={count.id}>
+                            <td className="text-gray-400">
+                              {new Date(count.count_time).toLocaleString([], { 
+                                month: 'short', 
+                                day: 'numeric',
+                                hour: '2-digit', 
+                                minute: '2-digit' 
+                              })}
+                            </td>
+                            <td className="font-medium text-white">
+                              {count.location?.name?.replace('Stream Room - ', '')}
+                            </td>
+                            <td className="text-gray-300">{count.streamer?.name}</td>
+                            <td className="text-gray-400">{count.counted_by?.name}</td>
+                            <td className="text-right text-green-400 font-medium">{count.total_sold}</td>
+                            <td className="text-right">
+                              {count.total_discrepancies > 0 ? (
+                                <span className="text-amber-400">+{count.total_discrepancies}</span>
+                              ) : (
+                                <span className="text-gray-500">0</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Acquisitions Tab - Individual entries at actual purchase price */}
           {activeTab === 'acquisitions' && (
