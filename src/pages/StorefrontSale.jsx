@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-
 import { 
   fetchProducts,
   fetchLocations,
@@ -11,7 +10,6 @@ import { ToastContainer, useToast } from '../components/Toast'
 import { DollarSign, Save } from 'lucide-react'
 
 export default function StorefrontSale() {
-  
   const { toasts, addToast, removeToast } = useToast()
   
   const [products, setProducts] = useState([])
@@ -83,7 +81,7 @@ export default function StorefrontSale() {
         product_type: bulkForm.product_type,
         quantity: parseInt(bulkForm.quantity),
         sale_price: parseFloat(bulkForm.sale_price),
-        created_by: null
+        created_by: profile?.id
       })
 
       addToast('Bulk sale logged successfully!')
@@ -137,7 +135,7 @@ export default function StorefrontSale() {
         cost_basis: costBasis,
         profit: profit,
         notes: itemizedForm.notes,
-        created_by: null
+        created_by: profile?.id
       })
 
       // Update inventory
@@ -246,7 +244,6 @@ export default function StorefrontSale() {
               >
                 <option value="Pokemon">Pokemon</option>
                 <option value="One Piece">One Piece</option>
-                <option value="Other">Other</option>
               </select>
             </div>
             <div>
@@ -319,9 +316,11 @@ export default function StorefrontSale() {
                 required
               >
                 <option value="">Select product...</option>
-                {inventory.map(inv => (
+                {inventory
+                  .sort((a, b) => (a.product?.name || '').localeCompare(b.product?.name || ''))
+                  .map(inv => (
                   <option key={inv.id} value={inv.product_id}>
-                    {inv.product?.brand} - {inv.product?.category} - {inv.product?.name} - {inv.quantity} available - ${inv.avg_cost_basis?.toFixed(2)} cost
+                    {inv.product?.brand} - {inv.product?.type} - {inv.product?.name} - {inv.product?.category} ({inv.product?.language}) - {inv.quantity} avail
                   </option>
                 ))}
               </select>
