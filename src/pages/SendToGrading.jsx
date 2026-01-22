@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-
 import { 
   fetchProducts,
   fetchLocations,
@@ -12,7 +11,6 @@ import { ToastContainer, useToast } from '../components/Toast'
 import { Diamond, Save } from 'lucide-react'
 
 export default function SendToGrading() {
-  
   const { toasts, addToast, removeToast } = useToast()
   
   const [locations, setLocations] = useState([])
@@ -103,7 +101,7 @@ export default function SendToGrading() {
         quantity_sent: qty,
         status: 'Sent',
         notes: form.notes,
-        created_by: null
+        created_by: profile?.id
       })
 
       // Update inventory - subtract from source
@@ -218,9 +216,11 @@ export default function SendToGrading() {
                 required
               >
                 <option value="">Select singles...</option>
-                {inventory.map(inv => (
+                {inventory
+                  .sort((a, b) => (a.product?.name || '').localeCompare(b.product?.name || ''))
+                  .map(inv => (
                   <option key={inv.id} value={inv.product_id}>
-                    {inv.product?.brand} - {inv.product?.category} - {inv.product?.name} ({inv.product?.language}) - {inv.quantity} available
+                    {inv.product?.brand} - {inv.product?.type} - {inv.product?.name} - {inv.product?.category} ({inv.product?.language}) - {inv.quantity} avail
                   </option>
                 ))}
               </select>
