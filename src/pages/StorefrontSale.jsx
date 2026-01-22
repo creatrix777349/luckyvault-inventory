@@ -321,7 +321,7 @@ export default function StorefrontSale() {
                 <option value="">Select product...</option>
                 {inventory.map(inv => (
                   <option key={inv.id} value={inv.product_id}>
-                    {inv.product?.brand} - {inv.product?.name} - {inv.quantity} available - ${inv.avg_cost_basis?.toFixed(2)} cost
+                    {inv.product?.brand} - {inv.product?.category} - {inv.product?.name} - {inv.quantity} available - ${inv.avg_cost_basis?.toFixed(2)} cost
                   </option>
                 ))}
               </select>
