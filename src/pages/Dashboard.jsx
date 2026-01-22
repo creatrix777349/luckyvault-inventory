@@ -1,5 +1,6 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 import { 
   Package, 
   ShoppingCart, 
@@ -91,6 +92,51 @@ const actions = [
 ]
 
 export default function Dashboard() {
+  const [stats, setStats] = useState({
+    todayPurchases: 0,
+    pendingIntake: 0,
+    inGrading: 0
+  })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadStats()
+  }, [])
+
+  const loadStats = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0]
+
+      // Today's purchases
+      const { data: todayAcq } = await supabase
+        .from('acquisitions')
+        .select('id')
+        .eq('date_purchased', today)
+      
+      // Pending intake (acquisitions not yet in master)
+      const { data: pendingAcq } = await supabase
+        .from('acquisitions')
+        .select('id')
+        .eq('status', 'Received')
+      
+      // In grading
+      const { data: gradingItems } = await supabase
+        .from('grading_submissions')
+        .select('id')
+        .eq('status', 'Submitted')
+
+      setStats({
+        todayPurchases: todayAcq?.length || 0,
+        pendingIntake: pendingAcq?.length || 0,
+        inGrading: gradingItems?.length || 0
+      })
+    } catch (error) {
+      console.error('Error loading stats:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="fade-in">
       {/* Header */}
@@ -123,15 +169,21 @@ export default function Dashboard() {
       <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card">
           <p className="text-gray-400 text-sm mb-1">Today's Purchases</p>
-          <p className="font-display text-2xl font-bold text-white">--</p>
+          <p className="font-display text-2xl font-bold text-white">
+            {loading ? '--' : stats.todayPurchases}
+          </p>
         </div>
         <div className="card">
           <p className="text-gray-400 text-sm mb-1">Pending Intake</p>
-          <p className="font-display text-2xl font-bold text-yellow-400">--</p>
+          <p className="font-display text-2xl font-bold text-yellow-400">
+            {loading ? '--' : stats.pendingIntake}
+          </p>
         </div>
         <div className="card">
           <p className="text-gray-400 text-sm mb-1">In Grading</p>
-          <p className="font-display text-2xl font-bold text-purple-400">--</p>
+          <p className="font-display text-2xl font-bold text-purple-400">
+            {loading ? '--' : stats.inGrading}
+          </p>
         </div>
       </div>
     </div>
