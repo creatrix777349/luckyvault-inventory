@@ -482,8 +482,8 @@ export default function ManualInventory() {
           )}
         </div>
 
-        {/* Quantity and Cost - show when we have enough info */}
-        {((isSlab && productFilters.brand && productFilters.language) || (!isSlab && form.product_id)) && (
+        {/* Quantity and Cost - show for slabs when filters selected, or for non-slabs when product selected */}
+        {((isSlab && productFilters.brand && productFilters.language) || (!isSlab && productFilters.brand && productFilters.type && productFilters.language)) && (
           <div className="grid grid-cols-2 gap-4 mt-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
