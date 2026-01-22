@@ -315,3 +315,88 @@ export const updateHighValueItemLocation = async (id, locationId) => {
   if (error) throw error
   return data
 }
+
+// ============================================
+// STREAM COUNTS FUNCTIONS
+// ============================================
+
+export const createStreamCount = async (streamCount) => {
+  const { data, error } = await supabase
+    .from('stream_counts')
+    .insert(streamCount)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export const createStreamCountItems = async (items) => {
+  const { data, error } = await supabase
+    .from('stream_count_items')
+    .insert(items)
+    .select()
+  if (error) throw error
+  return data
+}
+
+export const fetchStreamCounts = async (locationId = null, dateFrom = null, dateTo = null) => {
+  let query = supabase
+    .from('stream_counts')
+    .select(`
+      *,
+      location:locations(name),
+      streamer:users!stream_counts_streamer_id_fkey(name),
+      counted_by:users!stream_counts_counted_by_id_fkey(name)
+    `)
+  
+  if (locationId) query = query.eq('location_id', locationId)
+  if (dateFrom) query = query.gte('count_time', dateFrom)
+  if (dateTo) query = query.lte('count_time', dateTo)
+  
+  const { data, error } = await query.order('count_time', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export const fetchStreamCountItems = async (streamCountId) => {
+  const { data, error } = await supabase
+    .from('stream_count_items')
+    .select(`
+      *,
+      product:products(*)
+    `)
+    .eq('stream_count_id', streamCountId)
+    .order('product(brand)', { ascending: true })
+    .order('product(name)', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+export const createUser = async (name) => {
+  const { data, error } = await supabase
+    .from('users')
+    .insert({ name, active: true, can_login: false })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export const fetchInventoryForRoom = async (locationId) => {
+  const { data, error } = await supabase
+    .from('inventory')
+    .select(`
+      *,
+      product:products(*)
+    `)
+    .eq('location_id', locationId)
+    .gt('quantity', 0)
+  if (error) throw error
+  
+  // Sort by brand then name
+  return (data || []).sort((a, b) => {
+    const brandCompare = (a.product?.brand || '').localeCompare(b.product?.brand || '')
+    if (brandCompare !== 0) return brandCompare
+    return (a.product?.name || '').localeCompare(b.product?.name || '')
+  })
+}
