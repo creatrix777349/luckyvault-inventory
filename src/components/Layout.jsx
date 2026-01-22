@@ -16,10 +16,12 @@ import {
   Menu,
   X,
   Plus,
-  PackagePlus
+  PackagePlus,
+  ClipboardList
 } from 'lucide-react'
 
 const navItems = [
+  { path: '/stream-counts', label: 'Stream Counts', icon: ClipboardList },
   { path: '/', label: 'Dashboard', icon: Home },
   { path: '/add-product', label: 'Add Product', icon: Plus },
   { path: '/manual-inventory', label: 'Manual Inventory', icon: PackagePlus },
