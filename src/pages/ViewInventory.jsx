@@ -386,7 +386,7 @@ export default function ViewInventory() {
                             </span>
                           </td>
                           <td className="text-gray-400">{item.item_type}</td>
-                          <td className="text-gray-400">High Value</td>
+                          <td className="text-gray-400">{item.item_type}</td>
                           <td className="text-gray-400">-</td>
                           <td className="text-right font-medium">1</td>
                           <td className="text-right text-gray-400">${item.purchase_price_usd?.toFixed(2) || '-'}</td>
@@ -443,7 +443,7 @@ export default function ViewInventory() {
                       </span>
                     </td>
                     <td className="text-gray-400">{item.item_type}</td>
-                    <td className="text-gray-400">High Value</td>
+                    <td className="text-gray-400">{item.item_type}</td>
                     <td className="text-gray-400">-</td>
                     <td className="text-right font-medium">1</td>
                     <td className="text-right text-gray-400">${item.purchase_price_usd?.toFixed(2) || '-'}</td>
