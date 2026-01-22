@@ -278,6 +278,96 @@ export const updateInventory = async (productId, locationId, quantityChange, new
   }
 }
 
+// Manual inventory update - handles null cost basis properly (doesn't affect averages)
+// Also supports additional metadata like grading_company, grade, current_market_price
+export const updateInventoryManual = async (productId, locationId, quantityChange, costBasis = null, metadata = {}) => {
+  // First try to get existing inventory record
+  const { data: existing } = await supabase
+    .from('inventory')
+    .select('*')
+    .eq('product_id', productId)
+    .eq('location_id', locationId)
+    .single()
+  
+  if (existing) {
+    const newQuantity = existing.quantity + quantityChange
+    const updateData = { 
+      quantity: newQuantity,
+      last_updated: new Date().toISOString()
+    }
+    
+    // Only update cost basis if provided AND existing has cost basis
+    // This prevents items with unknown cost from affecting the average
+    if (costBasis !== null) {
+      // Calculate weighted average cost only if both have cost basis
+      if (existing.avg_cost_basis && existing.avg_cost_basis > 0) {
+        const existingValue = existing.quantity * existing.avg_cost_basis
+        const newValue = quantityChange * costBasis
+        updateData.avg_cost_basis = (existingValue + newValue) / newQuantity
+      } else {
+        // No existing cost basis, just use the new one
+        updateData.avg_cost_basis = costBasis
+      }
+    }
+    // If costBasis is null, we intentionally don't update avg_cost_basis
+    // This means items with unknown cost don't affect the average
+    
+    // Add metadata fields if provided
+    if (metadata.current_market_price !== undefined) {
+      updateData.current_market_price = metadata.current_market_price
+    }
+    if (metadata.grading_company) {
+      updateData.grading_company = metadata.grading_company
+    }
+    if (metadata.grade) {
+      updateData.grade = metadata.grade
+    }
+    if (metadata.is_high_value !== undefined) {
+      updateData.is_high_value = metadata.is_high_value
+    }
+    
+    const { data, error } = await supabase
+      .from('inventory')
+      .update(updateData)
+      .eq('id', existing.id)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  } else {
+    // Create new inventory record
+    const insertData = {
+      product_id: productId,
+      location_id: locationId,
+      quantity: quantityChange,
+      // Keep avg_cost_basis as null if not provided - important for not affecting averages
+      avg_cost_basis: costBasis
+    }
+    
+    // Add metadata fields if provided
+    if (metadata.current_market_price !== undefined) {
+      insertData.current_market_price = metadata.current_market_price
+    }
+    if (metadata.grading_company) {
+      insertData.grading_company = metadata.grading_company
+    }
+    if (metadata.grade) {
+      insertData.grade = metadata.grade
+    }
+    if (metadata.is_high_value !== undefined) {
+      insertData.is_high_value = metadata.is_high_value
+    }
+    
+    const { data, error } = await supabase
+      .from('inventory')
+      .insert(insertData)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  }
+}
+
 export const updateAcquisitionStatus = async (id, status, quantityReceived = null) => {
   const updateData = { status, updated_at: new Date().toISOString() }
   if (quantityReceived !== null) {
