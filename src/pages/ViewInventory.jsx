@@ -66,7 +66,7 @@ export default function ViewInventory() {
     setEditingId(inv.id)
     setEditForm({
       quantity: inv.quantity.toString(),
-      avg_cost_basis: inv.avg_cost_basis?.toString() || '0'
+      avg_cost_basis: inv.avg_cost_basis?.toString() || ''
     })
   }
 
@@ -77,12 +77,17 @@ export default function ViewInventory() {
 
   const saveEdit = async (invId) => {
     try {
+      const updateData = {
+        quantity: parseInt(editForm.quantity) || 0
+      }
+      // Only update avg_cost_basis if it has a value (don't set to 0 for empty)
+      if (editForm.avg_cost_basis !== '') {
+        updateData.avg_cost_basis = parseFloat(editForm.avg_cost_basis)
+      }
+
       const { error } = await supabase
         .from('inventory')
-        .update({
-          quantity: parseInt(editForm.quantity) || 0,
-          avg_cost_basis: parseFloat(editForm.avg_cost_basis) || 0
-        })
+        .update(updateData)
         .eq('id', invId)
 
       if (error) throw error
@@ -94,6 +99,17 @@ export default function ViewInventory() {
       console.error('Error updating inventory:', error)
       addToast('Failed to update inventory', 'error')
     }
+  }
+
+  // Helper function to check if an inventory item is high value
+  const isHighValueItem = (inv) => {
+    // Check if it has current_market_price >= $200
+    if (inv.current_market_price && inv.current_market_price >= 200) return true
+    // Check if it's marked as high value
+    if (inv.is_high_value) return true
+    // Check if it's a slab type with avg_cost_basis >= $200
+    if (inv.product?.type === 'Slab' && inv.avg_cost_basis && inv.avg_cost_basis >= 200) return true
+    return false
   }
 
   // Filter regular inventory
@@ -149,13 +165,25 @@ export default function ViewInventory() {
   const regularItems = filteredInventory.reduce((sum, inv) => sum + inv.quantity, 0)
   const totalItems = regularItems + filteredHighValue.length
 
+  // Count high value regular inventory items
+  const highValueRegularCount = filteredInventory.filter(inv => isHighValueItem(inv)).reduce((sum, inv) => sum + inv.quantity, 0)
+
   // Render inventory row with edit capability
   const renderInventoryRow = (inv) => {
     const isEditing = editingId === inv.id
+    const isHV = isHighValueItem(inv)
 
     return (
-      <tr key={`reg-${inv.id}`}>
-        <td className="font-medium text-white">{inv.product?.name}</td>
+      <tr key={`reg-${inv.id}`} className={isHV ? 'bg-yellow-500/5' : ''}>
+        <td className="font-medium text-white">
+          <div className="flex items-center gap-2">
+            {isHV && <Star size={14} className="text-yellow-400 flex-shrink-0" />}
+            <span>{inv.product?.name}</span>
+            {inv.grading_company && (
+              <span className="text-purple-400 text-xs font-medium">{inv.grading_company} {inv.grade}</span>
+            )}
+          </div>
+        </td>
         <td>
           <span className={`badge ${inv.product?.brand === 'Pokemon' ? 'badge-warning' : inv.product?.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'}`}>
             {inv.product?.brand}
@@ -186,9 +214,21 @@ export default function ViewInventory() {
               className="w-24 text-right py-1 px-2 text-sm"
               min="0"
               step="0.01"
+              placeholder="Unknown"
             />
           ) : (
-            <span className="text-gray-400">${inv.avg_cost_basis?.toFixed(2) || '0.00'}</span>
+            <span className="text-gray-400">
+              {inv.avg_cost_basis != null ? `$${inv.avg_cost_basis.toFixed(2)}` : '-'}
+            </span>
+          )}
+        </td>
+        <td className="text-right">
+          {inv.current_market_price != null ? (
+            <span className={`font-medium ${isHV ? 'text-yellow-400' : 'text-blue-400'}`}>
+              ${inv.current_market_price.toFixed(2)}
+            </span>
+          ) : (
+            <span className="text-gray-500">-</span>
           )}
         </td>
         <td className="text-right text-vault-gold font-medium">
@@ -316,15 +356,23 @@ export default function ViewInventory() {
           <p className="font-display text-2xl font-bold text-vault-gold">${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         </div>
         <div className="card">
-          <p className="text-gray-400 text-sm">Regular Products</p>
-          <p className="font-display text-2xl font-bold text-white">{filteredInventory.length}</p>
+          <p className="text-gray-400 text-sm">Unique Products</p>
+          <p className="font-display text-2xl font-bold text-white">{filteredInventory.length + filteredHighValue.length}</p>
         </div>
         <div className="card">
-          <p className="text-gray-400 text-sm">High Value Items</p>
+          <p className="text-gray-400 text-sm">High Value ($200+)</p>
           <p className="font-display text-2xl font-bold text-yellow-400 flex items-center gap-1">
             <Star size={18} />
-            {filteredHighValue.length}
+            {highValueRegularCount + filteredHighValue.length}
           </p>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 mb-4 text-sm">
+        <div className="flex items-center gap-2">
+          <Star size={14} className="text-yellow-400" />
+          <span className="text-gray-400">= High Value ($200+ market price)</span>
         </div>
       </div>
 
@@ -365,6 +413,7 @@ export default function ViewInventory() {
                         <th>Lang</th>
                         <th className="text-right">Qty</th>
                         <th className="text-right">Avg Cost</th>
+                        <th className="text-right">Market</th>
                         <th className="text-right">Total Value</th>
                         <th className="text-right w-16">Edit</th>
                       </tr>
@@ -372,13 +421,13 @@ export default function ViewInventory() {
                     <tbody>
                       {/* Regular inventory items */}
                       {items.regular.map(inv => renderInventoryRow(inv))}
-                      {/* High value items */}
+                      {/* High value items from library */}
                       {items.highValue.map(item => (
                         <tr key={`hv-${item.id}`} className="bg-yellow-500/5">
                           <td className="font-medium text-white flex items-center gap-2">
                             <Star size={14} className="text-yellow-400" />
                             {item.card_name}
-                            {item.grading_company && <span className="text-gray-500 text-xs">({item.grading_company} {item.grade})</span>}
+                            {item.grading_company && <span className="text-purple-400 text-xs font-medium">{item.grading_company} {item.grade}</span>}
                           </td>
                           <td>
                             <span className={`badge ${item.brand === 'Pokemon' ? 'badge-warning' : item.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'}`}>
@@ -389,7 +438,10 @@ export default function ViewInventory() {
                           <td className="text-gray-400">{item.item_type}</td>
                           <td className="text-gray-400">-</td>
                           <td className="text-right font-medium">1</td>
-                          <td className="text-right text-gray-400">${item.purchase_price_usd?.toFixed(2) || '-'}</td>
+                          <td className="text-right text-gray-400">{item.purchase_price_usd != null ? `$${item.purchase_price_usd.toFixed(2)}` : '-'}</td>
+                          <td className="text-right text-yellow-400 font-medium">
+                            {item.current_market_price != null ? `$${item.current_market_price.toFixed(2)}` : '-'}
+                          </td>
                           <td className="text-right text-vault-gold font-medium">
                             ${item.purchase_price_usd?.toFixed(2) || '-'}
                           </td>
@@ -422,6 +474,7 @@ export default function ViewInventory() {
                   <th>Lang</th>
                   <th className="text-right">Qty</th>
                   <th className="text-right">Avg Cost</th>
+                  <th className="text-right">Market</th>
                   <th className="text-right">Total Value</th>
                   <th className="text-right w-16">Edit</th>
                 </tr>
@@ -429,13 +482,13 @@ export default function ViewInventory() {
               <tbody>
                 {/* Regular inventory items */}
                 {filteredInventory.map(inv => renderInventoryRow(inv))}
-                {/* High value items */}
+                {/* High value items from library */}
                 {filteredHighValue.map(item => (
                   <tr key={`hv-${item.id}`} className="bg-yellow-500/5">
                     <td className="font-medium text-white flex items-center gap-2">
                       <Star size={14} className="text-yellow-400" />
                       {item.card_name}
-                      {item.grading_company && <span className="text-gray-500 text-xs">({item.grading_company} {item.grade})</span>}
+                      {item.grading_company && <span className="text-purple-400 text-xs font-medium">{item.grading_company} {item.grade}</span>}
                     </td>
                     <td>
                       <span className={`badge ${item.brand === 'Pokemon' ? 'badge-warning' : item.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'}`}>
@@ -446,7 +499,10 @@ export default function ViewInventory() {
                     <td className="text-gray-400">{item.item_type}</td>
                     <td className="text-gray-400">-</td>
                     <td className="text-right font-medium">1</td>
-                    <td className="text-right text-gray-400">${item.purchase_price_usd?.toFixed(2) || '-'}</td>
+                    <td className="text-right text-gray-400">{item.purchase_price_usd != null ? `$${item.purchase_price_usd.toFixed(2)}` : '-'}</td>
+                    <td className="text-right text-yellow-400 font-medium">
+                      {item.current_market_price != null ? `$${item.current_market_price.toFixed(2)}` : '-'}
+                    </td>
                     <td className="text-right text-vault-gold font-medium">
                       ${item.purchase_price_usd?.toFixed(2) || '-'}
                     </td>
