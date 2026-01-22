@@ -307,7 +307,7 @@ export default function MovedInventory() {
                   <option value="">Select product...</option>
                   {filteredInventory.map(inv => (
                     <option key={inv.id} value={inv.product_id}>
-                      {inv.product?.brand} - {inv.product?.name} ({inv.product?.language}) - {inv.quantity} available
+                      {inv.product?.brand} - {inv.product?.category} - {inv.product?.name} ({inv.product?.language}) - {inv.quantity} available
                     </option>
                   ))}
                 </select>
