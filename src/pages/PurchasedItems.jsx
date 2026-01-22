@@ -61,10 +61,12 @@ export default function PurchasedItems() {
       setVendors(vendorsData)
       setPaymentMethods(paymentMethodsData)
       
-      // Default to first user if available
-      if (usersData.length > 0) {
-        setForm(f => ({ ...f, acquirer_id: usersData[0].id }))
+      const currentUser = usersData.find(u => u.email === profile?.email)
+      if (currentUser) {
+        setForm(f => ({ ...f, acquirer_id: currentUser.id }))
       }
+      
+      await getExchangeRates()
     } catch (error) {
       console.error('Error loading data:', error)
       addToast('Failed to load data', 'error')
@@ -95,9 +97,11 @@ export default function PurchasedItems() {
     if (!newVendorName.trim()) return
     
     try {
+      const currentUser = users.find(u => u.email === profile?.email)
       const vendor = await createVendor({
         name: newVendorName.trim(),
-        country: newVendorCountry || null
+        country: newVendorCountry || null,
+        created_by: currentUser?.id || null
       })
       setVendors([...vendors, vendor])
       setForm(f => ({ ...f, vendor_id: vendor.id }))
@@ -129,6 +133,7 @@ export default function PurchasedItems() {
 
     try {
       const costUSD = convertToUSD(parseFloat(form.cost), form.currency)
+      const currentUser = users.find(u => u.email === profile?.email)
       
       const acquisitionData = {
         date_purchased: form.date_purchased,
@@ -142,7 +147,8 @@ export default function PurchasedItems() {
         currency: form.currency,
         cost_usd: costUSD,
         status: 'Purchased',
-        notes: form.notes || null
+        notes: form.notes || null,
+        created_by: currentUser?.id || null
       }
       
       await createAcquisition(acquisitionData)
@@ -329,7 +335,6 @@ export default function PurchasedItems() {
                 <option value="">All Brands</option>
                 <option value="Pokemon">Pokemon</option>
                 <option value="One Piece">One Piece</option>
-                <option value="Other">Other</option>
               </select>
             </div>
             <div>
@@ -364,9 +369,11 @@ export default function PurchasedItems() {
               required
             >
               <option value="">Select product...</option>
-              {filteredProducts.map(product => (
+              {filteredProducts
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(product => (
                 <option key={product.id} value={product.id}>
-                  {product.brand} - {product.type} - {product.category} - {product.name} ({product.language})
+                  {product.brand} - {product.type} - {product.name} - {product.category} ({product.language})
                 </option>
               ))}
             </select>
