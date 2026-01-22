@@ -366,7 +366,7 @@ export default function PurchasedItems() {
               <option value="">Select product...</option>
               {filteredProducts.map(product => (
                 <option key={product.id} value={product.id}>
-                  {product.brand} - {product.type} - {product.name} ({product.language})
+                  {product.brand} - {product.type} - {product.category} - {product.name} ({product.language})
                 </option>
               ))}
             </select>
