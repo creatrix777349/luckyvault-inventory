@@ -61,11 +61,6 @@ export default function PurchasedItems() {
       setVendors(vendorsData)
       setPaymentMethods(paymentMethodsData)
       
-      const currentUser = usersData.find(u => u.email === profile?.email)
-      if (currentUser) {
-        setForm(f => ({ ...f, acquirer_id: currentUser.id }))
-      }
-      
       await getExchangeRates()
     } catch (error) {
       console.error('Error loading data:', error)
@@ -97,11 +92,10 @@ export default function PurchasedItems() {
     if (!newVendorName.trim()) return
     
     try {
-      const currentUser = users.find(u => u.email === profile?.email)
       const vendor = await createVendor({
         name: newVendorName.trim(),
         country: newVendorCountry || null,
-        created_by: currentUser?.id || null
+        created_by: null
       })
       setVendors([...vendors, vendor])
       setForm(f => ({ ...f, vendor_id: vendor.id }))
@@ -133,7 +127,6 @@ export default function PurchasedItems() {
 
     try {
       const costUSD = convertToUSD(parseFloat(form.cost), form.currency)
-      const currentUser = users.find(u => u.email === profile?.email)
       
       const acquisitionData = {
         date_purchased: form.date_purchased,
@@ -148,7 +141,7 @@ export default function PurchasedItems() {
         cost_usd: costUSD,
         status: 'Purchased',
         notes: form.notes || null,
-        created_by: currentUser?.id || null
+        created_by: null
       }
       
       await createAcquisition(acquisitionData)
