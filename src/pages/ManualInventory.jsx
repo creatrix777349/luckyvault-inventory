@@ -77,14 +77,11 @@ export default function ManualInventory() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (!form.product_id) {
-      addToast('Please select a product', 'error')
+    if (!form.product_id || !form.location_id) {
+      addToast('Please select product and location', 'error')
       return
     }
-    if (!form.location_id) {
-      addToast('Please select a location', 'error')
-      return
-    }
+
     if (!form.quantity || parseInt(form.quantity) <= 0) {
       addToast('Please enter a valid quantity', 'error')
       return
@@ -93,17 +90,14 @@ export default function ManualInventory() {
     setSubmitting(true)
 
     try {
-      const qty = parseInt(form.quantity)
-      const avgCost = form.avg_cost_basis ? parseFloat(form.avg_cost_basis) : 0
-      
       await updateInventory(
         form.product_id,
         form.location_id,
-        qty,
-        avgCost
+        parseInt(form.quantity),
+        parseFloat(form.avg_cost_basis) || 0
       )
 
-      addToast(`Added ${qty} items to inventory!`)
+      addToast('Inventory added successfully!')
       
       setForm(f => ({
         ...f,
@@ -133,10 +127,10 @@ export default function ManualInventory() {
       
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold text-white flex items-center gap-3">
-          <PackagePlus className="text-emerald-400" />
-          Manual Inventory Addition
+          <PackagePlus className="text-teal-400" />
+          Manual Inventory
         </h1>
-        <p className="text-gray-400 mt-1">Add existing inventory directly (bypasses purchase flow)</p>
+        <p className="text-gray-400 mt-1">Manually add inventory to any location</p>
       </div>
 
       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6 max-w-2xl">
@@ -210,9 +204,11 @@ export default function ManualInventory() {
               required
             >
               <option value="">Select product...</option>
-              {filteredProducts.map(product => (
+              {filteredProducts
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(product => (
                 <option key={product.id} value={product.id}>
-                  {product.brand} - {product.type} - {product.name} ({product.language})
+                  {product.brand} - {product.type} - {product.name} - {product.category} ({product.language})
                 </option>
               ))}
             </select>
@@ -231,13 +227,13 @@ export default function ManualInventory() {
               value={form.quantity}
               onChange={handleChange}
               min="1"
-              placeholder="e.g., 50"
+              placeholder="Enter quantity"
               required
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Avg Cost Per Unit (USD) (optional)
+              Average Cost Basis (USD)
             </label>
             <input
               type="number"
@@ -248,7 +244,6 @@ export default function ManualInventory() {
               step="0.01"
               placeholder="0.00"
             />
-            <p className="text-gray-500 text-xs mt-1">Leave blank if unknown</p>
           </div>
         </div>
 
@@ -263,7 +258,7 @@ export default function ManualInventory() {
             ) : (
               <>
                 <Save size={20} />
-                Add to Inventory
+                Add Inventory
               </>
             )}
           </button>
