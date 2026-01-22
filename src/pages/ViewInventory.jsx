@@ -18,6 +18,8 @@ export default function ViewInventory() {
   })
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({ quantity: '', avg_cost_basis: '' })
+  const [editingHvId, setEditingHvId] = useState(null)
+  const [editHvForm, setEditHvForm] = useState({ purchase_price_usd: '', current_market_price: '' })
 
   useEffect(() => {
     loadData()
@@ -98,6 +100,47 @@ export default function ViewInventory() {
     } catch (error) {
       console.error('Error updating inventory:', error)
       addToast('Failed to update inventory', 'error')
+    }
+  }
+
+  // High Value item edit functions
+  const startHvEdit = (item) => {
+    setEditingHvId(item.id)
+    setEditHvForm({
+      purchase_price_usd: item.purchase_price_usd?.toString() || '',
+      current_market_price: item.current_market_price?.toString() || ''
+    })
+  }
+
+  const cancelHvEdit = () => {
+    setEditingHvId(null)
+    setEditHvForm({ purchase_price_usd: '', current_market_price: '' })
+  }
+
+  const saveHvEdit = async (itemId) => {
+    try {
+      const updateData = {}
+      if (editHvForm.purchase_price_usd !== '') {
+        updateData.purchase_price_usd = parseFloat(editHvForm.purchase_price_usd)
+        updateData.purchase_price = parseFloat(editHvForm.purchase_price_usd)
+      }
+      if (editHvForm.current_market_price !== '') {
+        updateData.current_market_price = parseFloat(editHvForm.current_market_price)
+      }
+
+      const { error } = await supabase
+        .from('high_value_items')
+        .update(updateData)
+        .eq('id', itemId)
+
+      if (error) throw error
+
+      addToast('High value item updated!')
+      setEditingHvId(null)
+      loadInventory()
+    } catch (error) {
+      console.error('Error updating high value item:', error)
+      addToast('Failed to update item', 'error')
     }
   }
 
@@ -422,32 +465,76 @@ export default function ViewInventory() {
                       {/* Regular inventory items */}
                       {items.regular.map(inv => renderInventoryRow(inv))}
                       {/* High value items from library */}
-                      {items.highValue.map(item => (
-                        <tr key={`hv-${item.id}`} className="bg-yellow-500/5">
-                          <td className="font-medium text-white flex items-center gap-2">
-                            <Star size={14} className="text-yellow-400" />
-                            {item.card_name}
-                            {item.grading_company && <span className="text-purple-400 text-xs font-medium">{item.grading_company} {item.grade}</span>}
-                          </td>
-                          <td>
-                            <span className={`badge ${item.brand === 'Pokemon' ? 'badge-warning' : item.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'}`}>
-                              {item.brand}
-                            </span>
-                          </td>
-                          <td className="text-gray-400">{item.item_type}</td>
-                          <td className="text-gray-400">{item.item_type}</td>
-                          <td className="text-gray-400">-</td>
-                          <td className="text-right font-medium">1</td>
-                          <td className="text-right text-gray-400">{item.purchase_price_usd != null ? `$${item.purchase_price_usd.toFixed(2)}` : '-'}</td>
-                          <td className="text-right text-yellow-400 font-medium">
-                            {item.current_market_price != null ? `$${item.current_market_price.toFixed(2)}` : '-'}
-                          </td>
-                          <td className="text-right text-vault-gold font-medium">
-                            ${item.purchase_price_usd?.toFixed(2) || '-'}
-                          </td>
-                          <td className="text-right text-gray-500 text-xs">HV</td>
-                        </tr>
-                      ))}
+                      {items.highValue.map(item => {
+                        const isEditingHv = editingHvId === item.id
+                        return (
+                          <tr key={`hv-${item.id}`} className="bg-yellow-500/5">
+                            <td className="font-medium text-white flex items-center gap-2">
+                              <Star size={14} className="text-yellow-400" />
+                              {item.card_name}
+                              {item.grading_company && <span className="text-purple-400 text-xs font-medium">{item.grading_company} {item.grade}</span>}
+                            </td>
+                            <td>
+                              <span className={`badge ${item.brand === 'Pokemon' ? 'badge-warning' : item.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'}`}>
+                                {item.brand}
+                              </span>
+                            </td>
+                            <td className="text-gray-400">{item.item_type}</td>
+                            <td className="text-gray-400">{item.item_type}</td>
+                            <td className="text-gray-400">-</td>
+                            <td className="text-right font-medium">1</td>
+                            <td className="text-right">
+                              {isEditingHv ? (
+                                <input
+                                  type="number"
+                                  value={editHvForm.purchase_price_usd}
+                                  onChange={(e) => setEditHvForm(f => ({ ...f, purchase_price_usd: e.target.value }))}
+                                  className="w-24 text-right py-1 px-2 text-sm"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="Cost"
+                                />
+                              ) : (
+                                <span className="text-gray-400">{item.purchase_price_usd != null ? `$${item.purchase_price_usd.toFixed(2)}` : '-'}</span>
+                              )}
+                            </td>
+                            <td className="text-right">
+                              {isEditingHv ? (
+                                <input
+                                  type="number"
+                                  value={editHvForm.current_market_price}
+                                  onChange={(e) => setEditHvForm(f => ({ ...f, current_market_price: e.target.value }))}
+                                  className="w-24 text-right py-1 px-2 text-sm"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="Market"
+                                />
+                              ) : (
+                                <span className="text-yellow-400 font-medium">{item.current_market_price != null ? `$${item.current_market_price.toFixed(2)}` : '-'}</span>
+                              )}
+                            </td>
+                            <td className="text-right text-vault-gold font-medium">
+                              ${item.purchase_price_usd?.toFixed(2) || '-'}
+                            </td>
+                            <td className="text-right">
+                              {isEditingHv ? (
+                                <div className="flex items-center justify-end gap-1">
+                                  <button onClick={() => saveHvEdit(item.id)} className="p-1 text-green-400 hover:text-green-300" title="Save">
+                                    <Save size={16} />
+                                  </button>
+                                  <button onClick={cancelHvEdit} className="p-1 text-gray-400 hover:text-white" title="Cancel">
+                                    <X size={16} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button onClick={() => startHvEdit(item)} className="p-1 text-gray-500 hover:text-white" title="Edit">
+                                  <Edit2 size={16} />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 )}
@@ -483,32 +570,76 @@ export default function ViewInventory() {
                 {/* Regular inventory items */}
                 {filteredInventory.map(inv => renderInventoryRow(inv))}
                 {/* High value items from library */}
-                {filteredHighValue.map(item => (
-                  <tr key={`hv-${item.id}`} className="bg-yellow-500/5">
-                    <td className="font-medium text-white flex items-center gap-2">
-                      <Star size={14} className="text-yellow-400" />
-                      {item.card_name}
-                      {item.grading_company && <span className="text-purple-400 text-xs font-medium">{item.grading_company} {item.grade}</span>}
-                    </td>
-                    <td>
-                      <span className={`badge ${item.brand === 'Pokemon' ? 'badge-warning' : item.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'}`}>
-                        {item.brand}
-                      </span>
-                    </td>
-                    <td className="text-gray-400">{item.item_type}</td>
-                    <td className="text-gray-400">{item.item_type}</td>
-                    <td className="text-gray-400">-</td>
-                    <td className="text-right font-medium">1</td>
-                    <td className="text-right text-gray-400">{item.purchase_price_usd != null ? `$${item.purchase_price_usd.toFixed(2)}` : '-'}</td>
-                    <td className="text-right text-yellow-400 font-medium">
-                      {item.current_market_price != null ? `$${item.current_market_price.toFixed(2)}` : '-'}
-                    </td>
-                    <td className="text-right text-vault-gold font-medium">
-                      ${item.purchase_price_usd?.toFixed(2) || '-'}
-                    </td>
-                    <td className="text-right text-gray-500 text-xs">HV</td>
-                  </tr>
-                ))}
+                {filteredHighValue.map(item => {
+                  const isEditingHv = editingHvId === item.id
+                  return (
+                    <tr key={`hv-${item.id}`} className="bg-yellow-500/5">
+                      <td className="font-medium text-white flex items-center gap-2">
+                        <Star size={14} className="text-yellow-400" />
+                        {item.card_name}
+                        {item.grading_company && <span className="text-purple-400 text-xs font-medium">{item.grading_company} {item.grade}</span>}
+                      </td>
+                      <td>
+                        <span className={`badge ${item.brand === 'Pokemon' ? 'badge-warning' : item.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'}`}>
+                          {item.brand}
+                        </span>
+                      </td>
+                      <td className="text-gray-400">{item.item_type}</td>
+                      <td className="text-gray-400">{item.item_type}</td>
+                      <td className="text-gray-400">-</td>
+                      <td className="text-right font-medium">1</td>
+                      <td className="text-right">
+                        {isEditingHv ? (
+                          <input
+                            type="number"
+                            value={editHvForm.purchase_price_usd}
+                            onChange={(e) => setEditHvForm(f => ({ ...f, purchase_price_usd: e.target.value }))}
+                            className="w-24 text-right py-1 px-2 text-sm"
+                            min="0"
+                            step="0.01"
+                            placeholder="Cost"
+                          />
+                        ) : (
+                          <span className="text-gray-400">{item.purchase_price_usd != null ? `$${item.purchase_price_usd.toFixed(2)}` : '-'}</span>
+                        )}
+                      </td>
+                      <td className="text-right">
+                        {isEditingHv ? (
+                          <input
+                            type="number"
+                            value={editHvForm.current_market_price}
+                            onChange={(e) => setEditHvForm(f => ({ ...f, current_market_price: e.target.value }))}
+                            className="w-24 text-right py-1 px-2 text-sm"
+                            min="0"
+                            step="0.01"
+                            placeholder="Market"
+                          />
+                        ) : (
+                          <span className="text-yellow-400 font-medium">{item.current_market_price != null ? `$${item.current_market_price.toFixed(2)}` : '-'}</span>
+                        )}
+                      </td>
+                      <td className="text-right text-vault-gold font-medium">
+                        ${item.purchase_price_usd?.toFixed(2) || '-'}
+                      </td>
+                      <td className="text-right">
+                        {isEditingHv ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => saveHvEdit(item.id)} className="p-1 text-green-400 hover:text-green-300" title="Save">
+                              <Save size={16} />
+                            </button>
+                            <button onClick={cancelHvEdit} className="p-1 text-gray-400 hover:text-white" title="Cancel">
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button onClick={() => startHvEdit(item)} className="p-1 text-gray-500 hover:text-white" title="Edit">
+                            <Edit2 size={16} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}
