@@ -395,27 +395,29 @@ export default function ManualInventory() {
             </div>
           )}
 
-          {/* Product dropdown - always show, but for slabs it's optional if auto-select works */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Product {isSlab ? '(auto-selected by price)' : '*'}
-            </label>
-            <select
-              name="product_id"
-              value={form.product_id}
-              onChange={handleChange}
-              required={!isSlab}
-            >
-              <option value="">Select product...</option>
-              {filteredProducts
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map(product => (
-                <option key={product.id} value={product.id}>
-                  {product.brand} - {product.type} - {product.name} - {product.category} ({product.language})
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Product dropdown - only show for non-slabs */}
+          {!isSlab && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Product *
+              </label>
+              <select
+                name="product_id"
+                value={form.product_id}
+                onChange={handleChange}
+                required
+              >
+                <option value="">Select product...</option>
+                {filteredProducts
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map(product => (
+                  <option key={product.id} value={product.id}>
+                    {product.brand} - {product.type} - {product.name} - {product.category} ({product.language})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Quantity and Cost */}
