@@ -15,6 +15,7 @@ import HighValueTracking from './pages/HighValueTracking'
 import AddProduct from './pages/AddProduct'
 import ManualInventory from './pages/ManualInventory'
 import Reports from './pages/Reports'
+import StreamCounts from './pages/StreamCounts'
 
 // Components
 import Layout from './components/Layout'
@@ -24,6 +25,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Layout><Dashboard /></Layout>} />
+        <Route path="/stream-counts" element={<Layout><StreamCounts /></Layout>} />
         <Route path="/purchased-items" element={<Layout><PurchasedItems /></Layout>} />
         <Route path="/intake" element={<Layout><IntakeToMaster /></Layout>} />
         <Route path="/move-inventory" element={<Layout><MovedInventory /></Layout>} />
