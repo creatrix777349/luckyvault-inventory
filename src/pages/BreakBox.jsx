@@ -4,6 +4,7 @@ import {
   fetchLocations,
   fetchInventory,
   createBoxBreak,
+  createMovement,
   updateInventory
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
@@ -34,15 +35,18 @@ export default function BreakBox() {
   const loadData = async () => {
     try {
       const [productsData, locData] = await Promise.all([
-        fetchProducts(),
+        fetchProducts(), // Fetch all products to find packs too
         fetchLocations('Physical')
       ])
       setProducts(productsData)
       
+      // Find and store Master Inventory location
       const master = locData.find(l => l.name === 'Master Inventory')
       if (master) {
         setMasterLocation(master)
+        // Load inventory for Master Inventory
         const invData = await fetchInventory(master.id)
+        // Filter to only breakable products with quantity > 0
         const breakableInv = invData.filter(inv => inv.product?.breakable && inv.quantity > 0)
         setInventory(breakableInv)
       } else {
@@ -78,19 +82,20 @@ export default function BreakBox() {
   const findPackProduct = () => {
     if (!selectedProduct) return null
     
+    // Get all pack products with same brand and language
     const packProducts = products.filter(p => 
       p.brand === selectedProduct.brand &&
       p.type === 'Pack' &&
       p.language === selectedProduct.language
     )
     
-    // Try exact name match first
+    // Try exact name match first (for products like "Mega Brave" box -> "Mega Brave" pack)
     let match = packProducts.find(p => 
       p.name.toLowerCase() === selectedProduct.name.toLowerCase()
     )
     if (match) return match
     
-    // Try matching without common suffixes
+    // Try matching without common suffixes (e.g., "Mega Evolution Inferno X" -> "Mega Evolution Inferno X")
     match = packProducts.find(p => 
       selectedProduct.name.toLowerCase().startsWith(p.name.toLowerCase()) ||
       p.name.toLowerCase().startsWith(selectedProduct.name.toLowerCase())
@@ -107,7 +112,7 @@ export default function BreakBox() {
     })
     if (match) return match
     
-    // Fallback: match by first significant word
+    // Fallback: match by first significant word (skip common prefixes)
     const significantWord = selectedProduct.name.split(' ')[0].toLowerCase()
     if (significantWord.length > 2) {
       match = packProducts.find(p => 
@@ -165,7 +170,8 @@ export default function BreakBox() {
         packs_created: totalPacks,
         cost_basis_per_pack: costBasisPerPack,
         override_pack_count: form.override_pack_count,
-        notes: form.notes
+        notes: form.notes,
+        created_by: profile?.id
       })
 
       // Update inventory - subtract boxes from Master Inventory
@@ -217,6 +223,7 @@ export default function BreakBox() {
     <div className="fade-in">
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       
+      {/* Header */}
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold text-white flex items-center gap-3">
           <Box className="text-pink-400" />
@@ -267,10 +274,12 @@ export default function BreakBox() {
               required
             >
               <option value="">Select product...</option>
-              {inventory.map(inv => (
+              {inventory
+                .sort((a, b) => (a.product?.name || '').localeCompare(b.product?.name || ''))
+                .map(inv => (
                 <option key={inv.id} value={inv.product_id}>
-                  {inv.product?.brand} - {inv.product?.category} - {inv.product?.name} ({inv.product?.language}) 
-                  - {inv.quantity} available 
+                  {inv.product?.brand} - {inv.product?.type} - {inv.product?.name} - {inv.product?.category} ({inv.product?.language}) 
+                  - {inv.quantity} avail 
                   - {inv.product?.packs_per_box} packs/box
                 </option>
               ))}
