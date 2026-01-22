@@ -9,6 +9,20 @@ import {
 import { ToastContainer, useToast } from '../components/Toast'
 import { ArrowRightLeft, ArrowRight, Save } from 'lucide-react'
 
+// Only show these locations in the Move Inventory page
+const ALLOWED_LOCATION_NAMES = [
+  'Master Inventory',
+  'Stream Room 1',
+  'Stream Room 2',
+  'Stream Room 3',
+  'Stream Room 4',
+  'Stream Room 5',
+  'Front Store',
+  'Slab Room',
+  'Office Safe',
+  'Other/Out'
+]
+
 export default function MovedInventory() {
   const { toasts, addToast, removeToast } = useToast()
   
@@ -86,8 +100,10 @@ export default function MovedInventory() {
   const selectedInventory = inventory.find(inv => inv.product_id === form.product_id)
   const maxQuantity = selectedInventory?.quantity || 0
 
-  const physicalLocations = locations.filter(l => l.type === 'Physical')
-  const allDestinations = locations.filter(l => l.id !== form.from_location_id)
+  // Filter to only allowed locations
+  const allowedLocations = locations.filter(l => ALLOWED_LOCATION_NAMES.includes(l.name))
+  const physicalLocations = allowedLocations.filter(l => l.type === 'Physical')
+  const allDestinations = allowedLocations.filter(l => l.id !== form.from_location_id)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -117,8 +133,7 @@ export default function MovedInventory() {
         quantity: qty,
         cost_basis: costBasis,
         movement_type: 'Transfer',
-        notes: form.notes,
-        created_by: profile?.id
+        notes: form.notes
       })
 
       // Update inventory - subtract from source
