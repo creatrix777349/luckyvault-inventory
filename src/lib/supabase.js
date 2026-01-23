@@ -77,6 +77,7 @@ export const fetchInventory = async (locationId = null) => {
       location:locations(*)
     `)
     .gt('quantity', 0)
+    .or('deleted.is.null,deleted.eq.false')
   
   if (locationId) query = query.eq('location_id', locationId)
   
@@ -114,6 +115,7 @@ export const fetchHighValueItems = async (status = null) => {
       acquirer:users!high_value_items_acquirer_id_fkey(name),
       vendor:vendors(name)
     `)
+    .or('deleted.is.null,deleted.eq.false')
   
   if (status) query = query.eq('status', status)
   
