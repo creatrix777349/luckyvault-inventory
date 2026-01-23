@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { BarChart3, Calendar, CalendarRange, CalendarDays, ShoppingCart, Receipt, FileText, Filter, ClipboardList } from 'lucide-react'
+import { BarChart3, Calendar, CalendarRange, CalendarDays, ShoppingCart, Receipt, FileText, Filter, ClipboardList, DollarSign } from 'lucide-react'
 
 export default function Reports() {
   const { toasts, addToast, removeToast } = useToast()
@@ -203,12 +203,39 @@ export default function Reports() {
         return acc
       }, {}) || {}
 
+      // Fetch storefront sales
+      let storefrontSales = []
+      try {
+        const { data: salesData, error: salesError } = await supabase
+          .from('storefront_sales')
+          .select(`
+            *,
+            product:products(brand, type, name, language, category),
+            location:locations(name)
+          `)
+          .gte('date', start)
+          .lte('date', end)
+          .order('date', { ascending: false })
+        if (salesData && !salesError) storefrontSales = salesData
+      } catch (e) {
+        console.log('Storefront sales table may not exist yet')
+      }
+
+      // Calculate storefront sales totals
+      const totalStorefrontSales = storefrontSales.reduce((sum, s) => sum + (s.sale_price || 0), 0)
+      const totalStorefrontProfit = storefrontSales.reduce((sum, s) => sum + (s.profit || 0), 0)
+      const totalStorefrontCost = storefrontSales.reduce((sum, s) => sum + (s.cost_basis || 0), 0)
+
       setReportData({
         dateRange: { start, end },
         acquisitions: acquisitions || [],
         expenses: expenses || [],
         streamCounts,
         streamCountItems,
+        storefrontSales,
+        totalStorefrontSales,
+        totalStorefrontProfit,
+        totalStorefrontCost,
         countries,
         totalAcquisitionsCost,
         totalExpensesCost,
@@ -385,13 +412,22 @@ export default function Reports() {
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
             <div className="card">
               <p className="text-gray-400 text-sm">Units Sold</p>
               <p className="font-display text-2xl font-bold text-green-400">
                 {reportData.totalUnitsSold?.toLocaleString() || 0}
               </p>
               <p className="text-gray-500 text-xs">{reportData.streamCounts?.length || 0} counts</p>
+            </div>
+            <div className="card">
+              <p className="text-gray-400 text-sm">Storefront Sales</p>
+              <p className="font-display text-2xl font-bold text-green-400">
+                ${reportData.totalStorefrontSales?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '0.00'}
+              </p>
+              <p className={`text-xs ${reportData.totalStorefrontProfit >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {reportData.totalStorefrontProfit >= 0 ? '+' : ''}${reportData.totalStorefrontProfit?.toFixed(2) || '0.00'} profit
+              </p>
             </div>
             <div className="card">
               <p className="text-gray-400 text-sm">Acquisitions</p>
@@ -434,6 +470,17 @@ export default function Reports() {
             >
               <ClipboardList size={18} />
               Stream Counts ({reportData.streamCounts?.length || 0})
+            </button>
+            <button
+              onClick={() => setActiveTab('storefront_sales')}
+              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all ${
+                activeTab === 'storefront_sales'
+                  ? 'bg-vault-gold text-vault-dark'
+                  : 'bg-vault-surface text-gray-400 hover:text-white'
+              }`}
+            >
+              <DollarSign size={18} />
+              Storefront Sales ({reportData.storefrontSales?.length || 0})
             </button>
             <button
               onClick={() => setActiveTab('acquisitions')}
@@ -733,6 +780,115 @@ export default function Reports() {
                         <td className="text-right font-bold text-vault-gold text-lg">
                           ${filteredTotalCost.toFixed(2)}
                         </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Storefront Sales Tab */}
+          {activeTab === 'storefront_sales' && (
+            <div className="card">
+              <h3 className="font-display text-lg font-semibold text-white mb-4">
+                Storefront Sales Detail
+              </h3>
+              
+              {/* Summary row */}
+              <div className="grid grid-cols-3 gap-4 mb-4 p-3 bg-vault-dark rounded-lg">
+                <div>
+                  <p className="text-gray-400 text-xs">Total Sales</p>
+                  <p className="text-green-400 font-bold">${reportData.totalStorefrontSales?.toFixed(2) || '0.00'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs">Cost Basis</p>
+                  <p className="text-gray-300 font-bold">${reportData.totalStorefrontCost?.toFixed(2) || '0.00'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs">Profit</p>
+                  <p className={`font-bold ${reportData.totalStorefrontProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {reportData.totalStorefrontProfit >= 0 ? '+' : ''}${reportData.totalStorefrontProfit?.toFixed(2) || '0.00'}
+                  </p>
+                </div>
+              </div>
+
+              {reportData.storefrontSales?.length === 0 ? (
+                <p className="text-gray-400 text-center py-8">No storefront sales in this period</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Product/Details</th>
+                        <th className="text-right">Qty</th>
+                        <th className="text-right">Sale Price</th>
+                        <th className="text-right">Cost</th>
+                        <th className="text-right">Profit</th>
+                        <th>Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportData.storefrontSales.map(sale => (
+                        <tr key={sale.id}>
+                          <td className="text-gray-400">{sale.date}</td>
+                          <td>
+                            <span className={`badge ${
+                              sale.sale_type === 'Bulk' ? 'badge-secondary' : 'badge-success'
+                            }`}>
+                              {sale.sale_type}
+                            </span>
+                          </td>
+                          <td>
+                            {sale.product ? (
+                              <div>
+                                <div className="font-medium text-white">{sale.product.name}</div>
+                                <div className="text-gray-500 text-xs">
+                                  {sale.product.brand} • {sale.product.type} • {sale.product.language}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-gray-300">
+                                {sale.brand} - {sale.product_type}
+                              </div>
+                            )}
+                          </td>
+                          <td className="text-right">{sale.quantity}</td>
+                          <td className="text-right text-green-400 font-medium">
+                            ${sale.sale_price?.toFixed(2)}
+                          </td>
+                          <td className="text-right text-gray-400">
+                            {sale.cost_basis ? `$${sale.cost_basis.toFixed(2)}` : '-'}
+                          </td>
+                          <td className={`text-right font-medium ${
+                            sale.profit >= 0 ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {sale.profit != null ? (
+                              <>{sale.profit >= 0 ? '+' : ''}${sale.profit.toFixed(2)}</>
+                            ) : '-'}
+                          </td>
+                          <td className="text-gray-500 text-sm max-w-[150px] truncate">
+                            {sale.notes || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                      {/* Total Row */}
+                      <tr className="border-t-2 border-vault-border">
+                        <td colSpan={4} className="font-semibold text-white">TOTAL</td>
+                        <td className="text-right font-bold text-green-400 text-lg">
+                          ${reportData.totalStorefrontSales?.toFixed(2)}
+                        </td>
+                        <td className="text-right font-bold text-gray-400">
+                          ${reportData.totalStorefrontCost?.toFixed(2)}
+                        </td>
+                        <td className={`text-right font-bold text-lg ${
+                          reportData.totalStorefrontProfit >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {reportData.totalStorefrontProfit >= 0 ? '+' : ''}${reportData.totalStorefrontProfit?.toFixed(2)}
+                        </td>
+                        <td></td>
                       </tr>
                     </tbody>
                   </table>
