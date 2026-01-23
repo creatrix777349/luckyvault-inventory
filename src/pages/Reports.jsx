@@ -1,19 +1,29 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { BarChart3, Calendar, CalendarRange, CalendarDays, ShoppingCart, Receipt, FileText, Filter, ClipboardList, DollarSign } from 'lucide-react'
+import { BarChart3, Calendar, CalendarRange, CalendarDays, ShoppingCart, Receipt, FileText, Filter, ClipboardList, DollarSign, Package, History } from 'lucide-react'
 
 export default function Reports() {
   const { toasts, addToast, removeToast } = useToast()
   
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState('stream_counts') // 'stream_counts', 'acquisitions', 'expenses', 'summary'
+  const [activeTab, setActiveTab] = useState('stream_counts') // 'stream_counts', 'storefront_sales', 'acquisitions', 'expenses', 'summary', 'inventory_catalog', 'inventory_history'
   const [dateMode, setDateMode] = useState('single') // 'single', 'range', 'weekly'
   const [singleDate, setSingleDate] = useState(new Date().toISOString().split('T')[0])
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [reportData, setReportData] = useState(null)
   const [countryFilter, setCountryFilter] = useState('') // Source country filter
+  
+  // Product catalog and history data
+  const [productCatalog, setProductCatalog] = useState([])
+  const [inventoryHistory, setInventoryHistory] = useState([])
+  const [catalogLoading, setCatalogLoading] = useState(false)
+
+  // Auto-load today's report on mount
+  useEffect(() => {
+    loadReport()
+  }, [])
 
   const getWeekDates = (date) => {
     const d = new Date(date)
@@ -256,6 +266,53 @@ export default function Reports() {
       addToast('Failed to load report', 'error')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Load all products (catalog)
+  const loadProductCatalog = async () => {
+    if (productCatalog.length > 0) return // Already loaded
+    setCatalogLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('active', true)
+        .order('brand')
+        .order('type')
+        .order('name')
+      
+      if (error) throw error
+      setProductCatalog(data || [])
+    } catch (error) {
+      console.error('Error loading product catalog:', error)
+      addToast('Failed to load product catalog', 'error')
+    } finally {
+      setCatalogLoading(false)
+    }
+  }
+
+  // Load inventory history (all inventory records including zero qty)
+  const loadInventoryHistory = async () => {
+    if (inventoryHistory.length > 0) return // Already loaded
+    setCatalogLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('inventory')
+        .select(`
+          *,
+          product:products(id, brand, type, name, category, language),
+          location:locations(id, name)
+        `)
+        .order('updated_at', { ascending: false })
+      
+      if (error) throw error
+      setInventoryHistory(data || [])
+    } catch (error) {
+      console.error('Error loading inventory history:', error)
+      addToast('Failed to load inventory history', 'error')
+    } finally {
+      setCatalogLoading(false)
     }
   }
 
@@ -514,6 +571,28 @@ export default function Reports() {
             >
               <FileText size={18} />
               Summary
+            </button>
+            <button
+              onClick={() => { setActiveTab('inventory_catalog'); loadProductCatalog(); }}
+              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all ${
+                activeTab === 'inventory_catalog'
+                  ? 'bg-vault-gold text-vault-dark'
+                  : 'bg-vault-surface text-gray-400 hover:text-white'
+              }`}
+            >
+              <Package size={18} />
+              Product Catalog
+            </button>
+            <button
+              onClick={() => { setActiveTab('inventory_history'); loadInventoryHistory(); }}
+              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all ${
+                activeTab === 'inventory_history'
+                  ? 'bg-vault-gold text-vault-dark'
+                  : 'bg-vault-surface text-gray-400 hover:text-white'
+              }`}
+            >
+              <History size={18} />
+              Inventory History
             </button>
           </div>
 
@@ -1072,11 +1151,122 @@ export default function Reports() {
               )}
             </div>
           )}
+
+          {/* Product Catalog Tab */}
+          {activeTab === 'inventory_catalog' && (
+            <div className="card">
+              <h3 className="font-display text-lg font-semibold text-white mb-4">
+                Product Catalog ({productCatalog.length} products)
+              </h3>
+              <p className="text-gray-400 text-sm mb-4">Master list of all products in the system</p>
+              
+              {catalogLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="spinner"></div>
+                </div>
+              ) : productCatalog.length === 0 ? (
+                <p className="text-gray-400 text-center py-8">No products found</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Brand</th>
+                        <th>Type</th>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th>Language</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {productCatalog.map(product => (
+                        <tr key={product.id}>
+                          <td>
+                            <span className={`badge ${
+                              product.brand === 'Pokemon' ? 'badge-warning' : 
+                              product.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'
+                            }`}>
+                              {product.brand}
+                            </span>
+                          </td>
+                          <td className="text-gray-300">{product.type}</td>
+                          <td className="font-medium text-white">{product.name}</td>
+                          <td className="text-gray-400">{product.category}</td>
+                          <td>
+                            <span className={`badge ${
+                              product.language === 'JP' ? 'badge-info' : 
+                              product.language === 'CN' ? 'badge-warning' : 'badge-secondary'
+                            }`}>
+                              {product.language}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Inventory History Tab */}
+          {activeTab === 'inventory_history' && (
+            <div className="card">
+              <h3 className="font-display text-lg font-semibold text-white mb-4">
+                Inventory History ({inventoryHistory.length} records)
+              </h3>
+              <p className="text-gray-400 text-sm mb-4">All inventory records including sold out items</p>
+              
+              {catalogLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="spinner"></div>
+                </div>
+              ) : inventoryHistory.length === 0 ? (
+                <p className="text-gray-400 text-center py-8">No inventory history found</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th>Location</th>
+                        <th className="text-right">Quantity</th>
+                        <th className="text-right">Avg Cost</th>
+                        <th>Last Updated</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inventoryHistory.map(inv => (
+                        <tr key={inv.id} className={inv.quantity === 0 ? 'opacity-50' : ''}>
+                          <td>
+                            <div className="font-medium text-white">{inv.product?.name}</div>
+                            <div className="text-gray-500 text-xs">
+                              {inv.product?.brand} • {inv.product?.type} • {inv.product?.language}
+                            </div>
+                          </td>
+                          <td className="text-gray-300">{inv.location?.name || '-'}</td>
+                          <td className={`text-right font-medium ${inv.quantity === 0 ? 'text-red-400' : 'text-white'}`}>
+                            {inv.quantity}
+                          </td>
+                          <td className="text-right text-vault-gold">
+                            {inv.avg_cost_basis ? `$${inv.avg_cost_basis.toFixed(2)}` : '-'}
+                          </td>
+                          <td className="text-gray-500 text-sm">
+                            {inv.updated_at ? new Date(inv.updated_at).toLocaleDateString() : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <div className="card text-center py-12">
-          <Calendar className="mx-auto text-gray-600 mb-4" size={48} />
-          <p className="text-gray-400">Select dates and click Generate to view reports</p>
+          <div className="spinner mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading today's report...</p>
         </div>
       )}
     </div>
