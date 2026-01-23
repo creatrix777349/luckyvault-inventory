@@ -26,7 +26,8 @@ export default function StorefrontSale() {
     brand: 'Pokemon',
     product_type: 'Single',
     quantity: 1,
-    sale_price: ''
+    sale_price: '',
+    notes: ''
   })
 
   // Product sale form - similar to ManualInventory
@@ -133,6 +134,7 @@ export default function StorefrontSale() {
         product_type: bulkForm.product_type,
         quantity: parseInt(bulkForm.quantity),
         sale_price: parseFloat(bulkForm.sale_price),
+        notes: bulkForm.notes || null,
         created_by: null
       })
 
@@ -141,7 +143,8 @@ export default function StorefrontSale() {
       setBulkForm(f => ({
         ...f,
         quantity: 1,
-        sale_price: ''
+        sale_price: '',
+        notes: ''
       }))
     } catch (error) {
       console.error('Error logging sale:', error)
@@ -339,6 +342,16 @@ export default function StorefrontSale() {
               step="0.01"
               placeholder="0.00"
               required
+            />
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-300 mb-2">Notes</label>
+            <textarea
+              value={bulkForm.notes}
+              onChange={(e) => setBulkForm(f => ({ ...f, notes: e.target.value }))}
+              rows={2}
+              placeholder="Optional notes about this sale..."
             />
           </div>
 
