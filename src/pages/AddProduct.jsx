@@ -17,7 +17,8 @@ export default function AddProduct() {
     name: '',
     language: 'EN',
     breakable: true,
-    packs_per_box: ''
+    packs_per_box: '',
+    appendCategory: true  // Auto-append category to name
   })
 
   const handleChange = (e) => {
@@ -26,6 +27,17 @@ export default function AddProduct() {
       ...f, 
       [name]: type === 'checkbox' ? checked : value 
     }))
+  }
+
+  // Generate final product name
+  const getFinalName = () => {
+    if (!form.name.trim()) return '[Name]'
+    
+    // For Sealed products, append category if enabled
+    if (form.type === 'Sealed' && form.appendCategory && form.category) {
+      return `${form.name.trim()} ${form.category}`
+    }
+    return form.name.trim()
   }
 
   const handleSubmit = async (e) => {
@@ -39,11 +51,13 @@ export default function AddProduct() {
     setSubmitting(true)
 
     try {
+      const finalName = getFinalName()
+      
       await createProduct({
         brand: form.brand,
         type: form.type,
         category: form.category,
-        name: form.name.trim(),
+        name: finalName,
         language: form.language,
         breakable: form.breakable,
         packs_per_box: form.breakable && form.packs_per_box ? parseInt(form.packs_per_box) : null
@@ -70,7 +84,7 @@ export default function AddProduct() {
   }
 
   const categoryOptions = {
-    Sealed: ['Booster Box', 'ETB', 'Booster Bundle', 'UPC', 'Tin', 'Tin Box', 'Blister Pack', 'Build & Battle', 'Collector Chest', 'Premium Collection', 'Ultra-Premium Collection', 'Collection Box', 'Starter Deck', 'Packs Set', 'Special', 'Other'],
+    Sealed: ['Booster Box', 'ETB', 'Booster Bundle', 'UPC', 'Tin', 'Tin Box', 'Blister Pack', 'Build & Battle', 'Collector Chest', 'Premium Collection', 'Ultra-Premium Collection', 'Collection Box', 'Figure Collection', 'Starter Deck', 'Deck', 'Packs Set', 'Special', 'Special Box', 'Collection', 'Other'],
     Pack: ['Booster Pack'],
     Single: ['Singles'],
     Slab: ['PSA', 'CGC', 'Beckett']
@@ -119,7 +133,8 @@ export default function AddProduct() {
                   ...f, 
                   type: newType,
                   category: categoryOptions[newType]?.[0] || '',
-                  breakable: newType === 'Sealed'
+                  breakable: newType === 'Sealed',
+                  appendCategory: newType === 'Sealed'
                 }))
               }}
               required
@@ -165,7 +180,7 @@ export default function AddProduct() {
 
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Product Name *
+              Set/Product Name *
             </label>
             <input
               type="text"
@@ -176,9 +191,28 @@ export default function AddProduct() {
               required
             />
             <p className="text-gray-500 text-xs mt-1">
-              Don't include "Booster Box" or language - those are added via Type and Language
+              Enter the set name (e.g., "Journey Together", "Mega Dream")
             </p>
           </div>
+
+          {/* Append Category Toggle - only for Sealed */}
+          {form.type === 'Sealed' && (
+            <div className="md:col-span-2">
+              <div className="flex items-center gap-3 p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                <input
+                  type="checkbox"
+                  id="appendCategory"
+                  name="appendCategory"
+                  checked={form.appendCategory}
+                  onChange={handleChange}
+                  className="w-5 h-5"
+                />
+                <label htmlFor="appendCategory" className="text-sm text-gray-300">
+                  Auto-append product type to name (e.g., "Journey Together" → "Journey Together ETB")
+                </label>
+              </div>
+            </div>
+          )}
 
           {form.type === 'Sealed' && (
             <>
@@ -222,9 +256,9 @@ export default function AddProduct() {
         <div className="mt-6 p-4 bg-vault-dark rounded-lg border border-vault-border">
           <p className="text-gray-400 text-sm mb-2">Preview:</p>
           <p className="text-white font-medium">
-            {form.brand} - {form.type} - {form.category} - {form.name || '[Name]'} ({form.language})
+            {form.brand} - {form.type} - <span className="text-vault-gold">{getFinalName()}</span> - {form.category} ({form.language})
             {form.breakable && form.packs_per_box && (
-              <span className="text-vault-gold ml-2">• {form.packs_per_box} packs</span>
+              <span className="text-blue-400 ml-2">• {form.packs_per_box} packs</span>
             )}
           </p>
         </div>
