@@ -21,8 +21,8 @@ import {
 } from 'lucide-react'
 
 const navItems = [
-  { path: '/stream-counts', label: 'Stream Counts', icon: ClipboardList },
   { path: '/', label: 'Dashboard', icon: Home },
+  { path: '/stream-counts', label: 'Stream Counts', icon: ClipboardList },
   { path: '/add-product', label: 'Add Product', icon: Plus },
   { path: '/manual-inventory', label: 'Manual Inventory', icon: PackagePlus },
   { path: '/purchased-items', label: 'Purchased Items', icon: ShoppingCart },
