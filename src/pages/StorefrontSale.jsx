@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { 
   fetchProducts,
-  fetchLocations,
-  fetchInventory,
   createStorefrontSale,
   supabase
 } from '../lib/supabase'
@@ -13,7 +11,6 @@ export default function StorefrontSale() {
   const { toasts, addToast, removeToast } = useToast()
   
   const [products, setProducts] = useState([])
-  const [locations, setLocations] = useState([])
   const [inventory, setInventory] = useState([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -30,11 +27,10 @@ export default function StorefrontSale() {
     notes: ''
   })
 
-  // Product sale form - similar to ManualInventory
+  // Product sale form
   const [productForm, setProductForm] = useState({
     date: new Date().toISOString().split('T')[0],
-    location_id: '',
-    product_id: '',
+    inventory_id: '', // Now we select inventory directly (includes location)
     quantity: 1,
     sale_price: '',
     notes: ''
@@ -50,41 +46,27 @@ export default function StorefrontSale() {
     loadData()
   }, [])
 
-  // Load inventory when location changes
-  useEffect(() => {
-    if (productForm.location_id) {
-      loadLocationInventory(productForm.location_id)
-    }
-  }, [productForm.location_id])
-
   const loadData = async () => {
     try {
-      const [productsData, locData] = await Promise.all([
-        fetchProducts(),
-        fetchLocations('Physical')
-      ])
-      setProducts(productsData)
-      setLocations(locData)
+      // Load all inventory from ALL locations
+      const { data: invData, error: invError } = await supabase
+        .from('inventory')
+        .select(`
+          *,
+          product:products(id, brand, type, name, language, category),
+          location:locations(id, name)
+        `)
+        .gt('quantity', 0)
+        .order('product_id')
       
-      // Default to Front Store if exists
-      const frontStore = locData.find(l => l.name === 'Front Store')
-      if (frontStore) {
-        setProductForm(f => ({ ...f, location_id: frontStore.id }))
-      }
+      if (invError) throw invError
+      
+      setInventory(invData || [])
     } catch (error) {
       console.error('Error loading data:', error)
       addToast('Failed to load data', 'error')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const loadLocationInventory = async (locationId) => {
-    try {
-      const invData = await fetchInventory(locationId)
-      setInventory(invData)
-    } catch (error) {
-      console.error('Error loading inventory:', error)
     }
   }
 
@@ -96,7 +78,7 @@ export default function StorefrontSale() {
   const handleFilterChange = (e) => {
     const { name, value } = e.target
     setProductFilters(f => ({ ...f, [name]: value }))
-    setProductForm(f => ({ ...f, product_id: '' }))
+    setProductForm(f => ({ ...f, inventory_id: '' }))
   }
 
   // Filter inventory based on product filters
@@ -105,15 +87,15 @@ export default function StorefrontSale() {
     if (productFilters.brand && inv.product.brand !== productFilters.brand) return false
     if (productFilters.type && inv.product.type !== productFilters.type) return false
     if (productFilters.language && inv.product.language !== productFilters.language) return false
-    return inv.quantity > 0 // Only show items with stock
+    return inv.quantity > 0
   })
 
   // Get selected inventory item
-  const selectedInventory = inventory.find(inv => inv.product_id === productForm.product_id)
+  const selectedInventory = inventory.find(inv => inv.id === productForm.inventory_id)
   
   // Calculate profit
   const estimatedProfit = productForm.sale_price && selectedInventory
-    ? parseFloat(productForm.sale_price) - (selectedInventory.avg_cost_basis * parseInt(productForm.quantity || 0))
+    ? parseFloat(productForm.sale_price) - ((selectedInventory.avg_cost_basis || 0) * parseInt(productForm.quantity || 0))
     : null
 
   const handleBulkSubmit = async (e) => {
@@ -157,7 +139,7 @@ export default function StorefrontSale() {
   const handleProductSubmit = async (e) => {
     e.preventDefault()
     
-    if (!productForm.product_id) {
+    if (!productForm.inventory_id) {
       addToast('Please select a product', 'error')
       return
     }
@@ -185,8 +167,8 @@ export default function StorefrontSale() {
       await createStorefrontSale({
         date: productForm.date,
         sale_type: 'Product',
-        product_id: productForm.product_id,
-        location_id: productForm.location_id,
+        product_id: selectedInventory.product_id,
+        location_id: selectedInventory.location_id,
         quantity: qty,
         sale_price: salePrice,
         cost_basis: costBasis,
@@ -218,14 +200,14 @@ export default function StorefrontSale() {
       // Reset form
       setProductForm(f => ({
         ...f,
-        product_id: '',
+        inventory_id: '',
         quantity: 1,
         sale_price: '',
         notes: ''
       }))
       
       // Reload inventory
-      loadLocationInventory(productForm.location_id)
+      loadData()
     } catch (error) {
       console.error('Error logging sale:', error)
       addToast('Failed to log sale', 'error')
@@ -364,7 +346,7 @@ export default function StorefrontSale() {
           </button>
         </form>
       ) : (
-        /* PRODUCT SALE FORM - Similar to ManualInventory but subtracts */
+        /* PRODUCT SALE FORM - Pulls from ALL inventory */
         <form onSubmit={handleProductSubmit} className="card max-w-2xl">
           <p className="text-gray-400 text-sm mb-4">
             For tracked inventory items - subtracts from stock and calculates profit
@@ -382,154 +364,136 @@ export default function StorefrontSale() {
             />
           </div>
 
-          {/* Location */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-300 mb-2">Selling From *</label>
-            <select
-              name="location_id"
-              value={productForm.location_id}
-              onChange={handleProductFormChange}
-              required
-            >
-              <option value="">Select location...</option>
-              {locations.map(loc => (
-                <option key={loc.id} value={loc.id}>{loc.name}</option>
-              ))}
-            </select>
-          </div>
-
           {/* Product Selection */}
-          {productForm.location_id && (
-            <div className="pt-4 border-t border-vault-border">
-              <h3 className="font-display text-lg font-semibold text-white mb-4">Product Selection</h3>
-              
-              <div className="grid grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Brand</label>
-                  <select name="brand" value={productFilters.brand} onChange={handleFilterChange}>
-                    <option value="">All Brands</option>
-                    <option value="Pokemon">Pokemon</option>
-                    <option value="One Piece">One Piece</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
-                  <select name="type" value={productFilters.type} onChange={handleFilterChange}>
-                    <option value="">All Types</option>
-                    <option value="Sealed">Sealed</option>
-                    <option value="Pack">Pack</option>
-                    <option value="Single">Single</option>
-                    <option value="Slab">Slab</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Language</label>
-                  <select name="language" value={productFilters.language} onChange={handleFilterChange}>
-                    <option value="">All Languages</option>
-                    <option value="EN">English</option>
-                    <option value="JP">Japanese</option>
-                    <option value="CN">Chinese</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Product Dropdown */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Product *</label>
-                <select
-                  name="product_id"
-                  value={productForm.product_id}
-                  onChange={handleProductFormChange}
-                  required
-                >
-                  <option value="">Select product...</option>
-                  {filteredInventory
-                    .sort((a, b) => (a.product?.name || '').localeCompare(b.product?.name || ''))
-                    .map(inv => (
-                    <option key={inv.id} value={inv.product_id}>
-                      {inv.product?.brand} - {inv.product?.type} - {inv.product?.name} - {inv.product?.category} ({inv.product?.language}) - {inv.quantity} avail @ ${inv.avg_cost_basis?.toFixed(2) || '0.00'}/ea
-                    </option>
-                  ))}
+          <div className="pt-4 border-t border-vault-border">
+            <h3 className="font-display text-lg font-semibold text-white mb-4">Product Selection</h3>
+            
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Brand</label>
+                <select name="brand" value={productFilters.brand} onChange={handleFilterChange}>
+                  <option value="">All Brands</option>
+                  <option value="Pokemon">Pokemon</option>
+                  <option value="One Piece">One Piece</option>
+                  <option value="Other">Other</option>
                 </select>
-                {filteredInventory.length === 0 && (
-                  <p className="text-yellow-400 text-xs mt-1">No inventory at this location matching filters</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
+                <select name="type" value={productFilters.type} onChange={handleFilterChange}>
+                  <option value="">All Types</option>
+                  <option value="Sealed">Sealed</option>
+                  <option value="Pack">Pack</option>
+                  <option value="Single">Single</option>
+                  <option value="Slab">Slab</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Language</label>
+                <select name="language" value={productFilters.language} onChange={handleFilterChange}>
+                  <option value="">All Languages</option>
+                  <option value="EN">English</option>
+                  <option value="JP">Japanese</option>
+                  <option value="CN">Chinese</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Product Dropdown - shows ALL inventory with location */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Product *</label>
+              <select
+                name="inventory_id"
+                value={productForm.inventory_id}
+                onChange={handleProductFormChange}
+                required
+              >
+                <option value="">Select product...</option>
+                {filteredInventory
+                  .sort((a, b) => (a.product?.name || '').localeCompare(b.product?.name || ''))
+                  .map(inv => (
+                  <option key={inv.id} value={inv.id}>
+                    {inv.product?.brand} - {inv.product?.type} - {inv.product?.name} ({inv.product?.language}) | {inv.quantity} @ ${inv.avg_cost_basis?.toFixed(2) || '0.00'}/ea | {inv.location?.name}
+                  </option>
+                ))}
+              </select>
+              {filteredInventory.length === 0 && (
+                <p className="text-yellow-400 text-xs mt-1">No inventory matching filters</p>
+              )}
+            </div>
+
+            {/* Quantity and Sale Price */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Quantity *</label>
+                <input
+                  type="number"
+                  name="quantity"
+                  value={productForm.quantity}
+                  onChange={handleProductFormChange}
+                  min="1"
+                  max={selectedInventory?.quantity || 1}
+                  required
+                />
+                {selectedInventory && (
+                  <p className="text-gray-500 text-xs mt-1">
+                    {selectedInventory.quantity} available at {selectedInventory.location?.name}
+                  </p>
                 )}
               </div>
-
-              {/* Quantity and Sale Price */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Quantity *</label>
-                  <input
-                    type="number"
-                    name="quantity"
-                    value={productForm.quantity}
-                    onChange={handleProductFormChange}
-                    min="1"
-                    max={selectedInventory?.quantity || 1}
-                    required
-                  />
-                  {selectedInventory && (
-                    <p className="text-gray-500 text-xs mt-1">
-                      {selectedInventory.quantity} available
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Sale Price ($) *</label>
-                  <input
-                    type="number"
-                    name="sale_price"
-                    value={productForm.sale_price}
-                    onChange={handleProductFormChange}
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Profit Preview */}
-              {estimatedProfit !== null && (
-                <div className={`mt-4 p-3 rounded-lg flex items-center justify-between ${
-                  estimatedProfit >= 0 
-                    ? 'bg-green-500/10 border border-green-500/30' 
-                    : 'bg-red-500/10 border border-red-500/30'
-                }`}>
-                  <div className="flex items-center gap-2">
-                    {estimatedProfit >= 0 ? (
-                      <TrendingUp className="text-green-400" size={20} />
-                    ) : (
-                      <TrendingDown className="text-red-400" size={20} />
-                    )}
-                    <span className="text-gray-300">Estimated Profit:</span>
-                  </div>
-                  <span className={`font-bold text-lg ${estimatedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {estimatedProfit >= 0 ? '+' : '-'}${Math.abs(estimatedProfit).toFixed(2)}
-                  </span>
-                </div>
-              )}
-
-              {/* Notes */}
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Notes</label>
-                <textarea
-                  name="notes"
-                  value={productForm.notes}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Sale Price ($) *</label>
+                <input
+                  type="number"
+                  name="sale_price"
+                  value={productForm.sale_price}
                   onChange={handleProductFormChange}
-                  rows={2}
-                  placeholder="Optional notes..."
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  required
                 />
               </div>
             </div>
-          )}
+
+            {/* Profit Preview */}
+            {estimatedProfit !== null && (
+              <div className={`mt-4 p-3 rounded-lg flex items-center justify-between ${
+                estimatedProfit >= 0 
+                  ? 'bg-green-500/10 border border-green-500/30' 
+                  : 'bg-red-500/10 border border-red-500/30'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {estimatedProfit >= 0 ? (
+                    <TrendingUp className="text-green-400" size={20} />
+                  ) : (
+                    <TrendingDown className="text-red-400" size={20} />
+                  )}
+                  <span className="text-gray-300">Estimated Profit:</span>
+                </div>
+                <span className={`font-bold text-lg ${estimatedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {estimatedProfit >= 0 ? '+' : '-'}${Math.abs(estimatedProfit).toFixed(2)}
+                </span>
+              </div>
+            )}
+
+            {/* Notes */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Notes</label>
+              <textarea
+                name="notes"
+                value={productForm.notes}
+                onChange={handleProductFormChange}
+                rows={2}
+                placeholder="Optional notes..."
+              />
+            </div>
+          </div>
 
           <button 
             type="submit" 
             className="btn btn-primary w-full mt-6"
-            disabled={submitting || !productForm.product_id || !productForm.location_id}
+            disabled={submitting || !productForm.inventory_id}
           >
             {submitting ? <div className="spinner w-5 h-5 border-2"></div> : <><Save size={20} /> Log Sale</>}
           </button>
