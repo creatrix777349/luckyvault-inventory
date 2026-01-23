@@ -9,7 +9,7 @@ import {
   supabase
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { Star, Plus, Save, X, ArrowRightLeft, Camera, Upload, TrendingUp, TrendingDown, Edit2 } from 'lucide-react'
+import { Star, Plus, Save, X, ArrowRightLeft, Camera, Upload, TrendingUp, TrendingDown, Edit2, Trash2 } from 'lucide-react'
 
 // Grade options for dropdown
 const GRADE_OPTIONS = [
@@ -142,6 +142,19 @@ export default function HighValueTracking() {
               item={item} 
               onMove={() => setShowMoveModal(item)} 
               onEdit={() => setShowEditModal(item)}
+              onDelete={async () => {
+                if (!confirm('Are you sure you want to delete this high value item?')) return
+                try {
+                  await supabase
+                    .from('high_value_items')
+                    .update({ deleted: true, deleted_at: new Date().toISOString() })
+                    .eq('id', item.id)
+                  addToast('Item deleted')
+                  loadData()
+                } catch (error) {
+                  addToast('Failed to delete item', 'error')
+                }
+              }}
               onUpdate={loadData} 
             />
           ))}
@@ -181,7 +194,7 @@ export default function HighValueTracking() {
   )
 }
 
-function HighValueCard({ item, onMove, onUpdate, onEdit }) {
+function HighValueCard({ item, onMove, onUpdate, onEdit, onDelete }) {
   const [editingMarket, setEditingMarket] = useState(false)
   const [editingPaid, setEditingPaid] = useState(false)
   const [marketPrice, setMarketPrice] = useState(item.current_market_price || '')
@@ -333,12 +346,17 @@ function HighValueCard({ item, onMove, onUpdate, onEdit }) {
           )}
         </div>
         
-        {/* Location & Move Button */}
+        {/* Location & Action Buttons */}
         <div className="flex justify-between items-center mt-3 pt-3 border-t border-vault-border">
-          <p className="text-gray-500 text-xs truncate max-w-[60%]">{item.location?.name}</p>
-          <button onClick={onMove} className="btn btn-secondary text-xs py-1 px-2">
-            <ArrowRightLeft size={12} /> Move
-          </button>
+          <p className="text-gray-500 text-xs truncate max-w-[40%]">{item.location?.name}</p>
+          <div className="flex gap-1">
+            <button onClick={onMove} className="btn btn-secondary text-xs py-1 px-2">
+              <ArrowRightLeft size={12} /> Move
+            </button>
+            <button onClick={onDelete} className="btn btn-secondary text-xs py-1 px-2 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30">
+              <Trash2 size={12} />
+            </button>
+          </div>
         </div>
       </div>
     </div>
