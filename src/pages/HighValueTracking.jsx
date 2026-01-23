@@ -222,13 +222,13 @@ function HighValueCard({ item, onMove, onUpdate, onEdit }) {
 
   return (
     <div className="card border-yellow-500/30 bg-gradient-to-br from-yellow-500/5 to-amber-600/5">
-      {/* Square thumbnail with object-contain - clickable for edit */}
+      {/* Square thumbnail with object-cover - clickable for edit */}
       <div 
         className="aspect-square bg-vault-dark rounded-lg mb-3 flex items-center justify-center overflow-hidden relative group cursor-pointer"
         onClick={onEdit}
       >
         {item.photo_url ? (
-          <img src={item.photo_url} alt={item.card_name} className="w-full h-full object-contain" />
+          <img src={item.photo_url} alt={item.card_name} className="w-full h-full object-cover" />
         ) : (
           <Camera className="text-gray-600" size={48} />
         )}
