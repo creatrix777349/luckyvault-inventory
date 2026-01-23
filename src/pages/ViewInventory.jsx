@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { fetchInventory, fetchLocations, supabase } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { Eye, Package, Search, Star, Edit2, Save, X } from 'lucide-react'
+import { Eye, Package, Search, Star, Edit2, Save, X, Trash2 } from 'lucide-react'
 
 export default function ViewInventory() {
   const { toasts, addToast, removeToast } = useToast()
@@ -141,6 +141,46 @@ export default function ViewInventory() {
     } catch (error) {
       console.error('Error updating high value item:', error)
       addToast('Failed to update item', 'error')
+    }
+  }
+
+  // Soft delete inventory item
+  const deleteInventory = async (invId) => {
+    if (!confirm('Are you sure you want to delete this inventory entry?')) return
+    
+    try {
+      const { error } = await supabase
+        .from('inventory')
+        .update({ deleted: true, deleted_at: new Date().toISOString() })
+        .eq('id', invId)
+
+      if (error) throw error
+
+      addToast('Inventory entry deleted')
+      loadInventory()
+    } catch (error) {
+      console.error('Error deleting inventory:', error)
+      addToast('Failed to delete inventory', 'error')
+    }
+  }
+
+  // Soft delete high value item
+  const deleteHvItem = async (itemId) => {
+    if (!confirm('Are you sure you want to delete this high value item?')) return
+    
+    try {
+      const { error } = await supabase
+        .from('high_value_items')
+        .update({ deleted: true, deleted_at: new Date().toISOString() })
+        .eq('id', itemId)
+
+      if (error) throw error
+
+      addToast('High value item deleted')
+      loadInventory()
+    } catch (error) {
+      console.error('Error deleting high value item:', error)
+      addToast('Failed to delete item', 'error')
     }
   }
 
@@ -296,13 +336,22 @@ export default function ViewInventory() {
               </button>
             </div>
           ) : (
-            <button
-              onClick={() => startEdit(inv)}
-              className="p-1 text-gray-500 hover:text-white"
-              title="Edit"
-            >
-              <Edit2 size={16} />
-            </button>
+            <div className="flex items-center justify-end gap-1">
+              <button
+                onClick={() => startEdit(inv)}
+                className="p-1 text-gray-500 hover:text-white"
+                title="Edit"
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => deleteInventory(inv.id)}
+                className="p-1 text-gray-500 hover:text-red-400"
+                title="Delete"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
           )}
         </td>
       </tr>
@@ -458,7 +507,7 @@ export default function ViewInventory() {
                         <th className="text-right">Avg Cost</th>
                         <th className="text-right">Market</th>
                         <th className="text-right">Total Value</th>
-                        <th className="text-right w-16">Edit</th>
+                        <th className="text-right w-24">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -527,9 +576,14 @@ export default function ViewInventory() {
                                   </button>
                                 </div>
                               ) : (
-                                <button onClick={() => startHvEdit(item)} className="p-1 text-gray-500 hover:text-white" title="Edit">
-                                  <Edit2 size={16} />
-                                </button>
+                                <div className="flex items-center justify-end gap-1">
+                                  <button onClick={() => startHvEdit(item)} className="p-1 text-gray-500 hover:text-white" title="Edit">
+                                    <Edit2 size={16} />
+                                  </button>
+                                  <button onClick={() => deleteHvItem(item.id)} className="p-1 text-gray-500 hover:text-red-400" title="Delete">
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
                               )}
                             </td>
                           </tr>
