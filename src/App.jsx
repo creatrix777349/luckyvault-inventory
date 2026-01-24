@@ -16,6 +16,9 @@ import AddProduct from './pages/AddProduct'
 import ManualInventory from './pages/ManualInventory'
 import Reports from './pages/Reports'
 import StreamCounts from './pages/StreamCounts'
+import PlatformSales from './pages/PlatformSales'
+import ProductMapping from './pages/ProductMapping'
+import UserManagement from './pages/UserManagement'
 
 // Components
 import Layout from './components/Layout'
@@ -26,6 +29,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout><Dashboard /></Layout>} />
         <Route path="/stream-counts" element={<Layout><StreamCounts /></Layout>} />
+        <Route path="/platform-sales" element={<Layout><PlatformSales /></Layout>} />
         <Route path="/purchased-items" element={<Layout><PurchasedItems /></Layout>} />
         <Route path="/intake" element={<Layout><IntakeToMaster /></Layout>} />
         <Route path="/move-inventory" element={<Layout><MovedInventory /></Layout>} />
@@ -38,6 +42,8 @@ function App() {
         <Route path="/add-product" element={<Layout><AddProduct /></Layout>} />
         <Route path="/manual-inventory" element={<Layout><ManualInventory /></Layout>} />
         <Route path="/reports" element={<Layout><Reports /></Layout>} />
+        <Route path="/product-mapping" element={<Layout><ProductMapping /></Layout>} />
+        <Route path="/users" element={<Layout><UserManagement /></Layout>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
