@@ -10,7 +10,7 @@ import {
   getExchangeRates
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { ShoppingCart, Plus, Save, X } from 'lucide-react'
+import { ShoppingCart, Plus, Save, X, Search, Trash2 } from 'lucide-react'
 
 export default function PurchasedItems() {
   const { toasts, addToast, removeToast } = useToast()
@@ -25,18 +25,23 @@ export default function PurchasedItems() {
   const [newVendorName, setNewVendorName] = useState('')
   const [newVendorCountry, setNewVendorCountry] = useState('USA')
 
-  const [form, setForm] = useState({
+  // Search state
+  const [searchTerm, setSearchTerm] = useState('')
+
+  // Header form (shared across all line items)
+  const [header, setHeader] = useState({
     date_purchased: new Date().toISOString().split('T')[0],
     acquirer_id: '',
     source_country: 'USA',
     vendor_id: '',
     payment_method_id: '',
-    product_id: '',
-    quantity_purchased: 1,
-    cost: '',
-    currency: 'USD',
-    notes: ''
+    currency: 'USD'
   })
+
+  // Line items (multiple products)
+  const [lineItems, setLineItems] = useState([
+    { id: 1, product_id: '', quantity: 1, cost: '', notes: '' }
+  ])
 
   const [productFilters, setProductFilters] = useState({
     brand: '',
@@ -70,23 +75,55 @@ export default function PurchasedItems() {
     }
   }
 
-  const handleChange = (e) => {
+  const handleHeaderChange = (e) => {
     const { name, value } = e.target
-    setForm(f => ({ ...f, [name]: value }))
+    setHeader(h => ({ ...h, [name]: value }))
   }
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target
     setProductFilters(f => ({ ...f, [name]: value }))
-    setForm(f => ({ ...f, product_id: '' }))
   }
 
+  // Filter products by search term and filters
   const filteredProducts = products.filter(p => {
+    // Search filter
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase()
+      const matchesSearch = 
+        p.name?.toLowerCase().includes(search) ||
+        p.brand?.toLowerCase().includes(search) ||
+        p.type?.toLowerCase().includes(search) ||
+        p.category?.toLowerCase().includes(search)
+      if (!matchesSearch) return false
+    }
+    
+    // Dropdown filters
     if (productFilters.brand && p.brand !== productFilters.brand) return false
     if (productFilters.type && p.type !== productFilters.type) return false
     if (productFilters.language && p.language !== productFilters.language) return false
     return true
   })
+
+  // Line item handlers
+  const addLineItem = () => {
+    const newId = Math.max(...lineItems.map(i => i.id), 0) + 1
+    setLineItems([...lineItems, { id: newId, product_id: '', quantity: 1, cost: '', notes: '' }])
+  }
+
+  const removeLineItem = (id) => {
+    if (lineItems.length <= 1) {
+      addToast('Must have at least one item', 'error')
+      return
+    }
+    setLineItems(lineItems.filter(i => i.id !== id))
+  }
+
+  const updateLineItem = (id, field, value) => {
+    setLineItems(lineItems.map(item => 
+      item.id === id ? { ...item, [field]: value } : item
+    ))
+  }
 
   const handleAddVendor = async () => {
     if (!newVendorName.trim()) return
@@ -98,7 +135,7 @@ export default function PurchasedItems() {
         created_by: null
       })
       setVendors([...vendors, vendor])
-      setForm(f => ({ ...f, vendor_id: vendor.id }))
+      setHeader(h => ({ ...h, vendor_id: vendor.id }))
       setShowNewVendor(false)
       setNewVendorName('')
       addToast('Vendor added successfully')
@@ -110,51 +147,49 @@ export default function PurchasedItems() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (!form.product_id) {
-      addToast('Please select a product', 'error')
-      return
-    }
-    if (!form.acquirer_id) {
+    // Validate header
+    if (!header.acquirer_id) {
       addToast('Please select an acquirer', 'error')
       return
     }
-    if (!form.cost || parseFloat(form.cost) <= 0) {
-      addToast('Please enter a valid cost', 'error')
+
+    // Validate line items
+    const validItems = lineItems.filter(item => item.product_id && item.cost)
+    if (validItems.length === 0) {
+      addToast('Please add at least one product with cost', 'error')
       return
     }
 
     setSubmitting(true)
 
     try {
-      const costUSD = convertToUSD(parseFloat(form.cost), form.currency)
-      
-      const acquisitionData = {
-        date_purchased: form.date_purchased,
-        acquirer_id: form.acquirer_id,
-        source_country: form.source_country,
-        vendor_id: form.vendor_id || null,
-        payment_method_id: form.payment_method_id || null,
-        product_id: form.product_id,
-        quantity_purchased: parseInt(form.quantity_purchased),
-        cost: parseFloat(form.cost),
-        currency: form.currency,
-        cost_usd: costUSD,
-        status: 'Purchased',
-        notes: form.notes || null,
-        created_by: null
+      // Create acquisition for each line item
+      for (const item of validItems) {
+        const costUSD = convertToUSD(parseFloat(item.cost), header.currency)
+        
+        const acquisitionData = {
+          date_purchased: header.date_purchased,
+          acquirer_id: header.acquirer_id,
+          source_country: header.source_country,
+          vendor_id: header.vendor_id || null,
+          payment_method_id: header.payment_method_id || null,
+          product_id: item.product_id,
+          quantity_purchased: parseInt(item.quantity),
+          cost: parseFloat(item.cost),
+          currency: header.currency,
+          cost_usd: costUSD,
+          status: 'Purchased',
+          notes: item.notes || null,
+          created_by: null
+        }
+        
+        await createAcquisition(acquisitionData)
       }
-      
-      await createAcquisition(acquisitionData)
 
-      addToast('Purchase logged successfully! Go to "Intake to Master" to receive into inventory.')
+      addToast(`${validItems.length} purchase(s) logged! Go to "Intake to Master" to receive into inventory.`)
       
-      setForm(f => ({
-        ...f,
-        product_id: '',
-        quantity_purchased: 1,
-        cost: '',
-        notes: ''
-      }))
+      // Reset line items but keep header
+      setLineItems([{ id: 1, product_id: '', quantity: 1, cost: '', notes: '' }])
     } catch (error) {
       console.error('Error creating acquisition:', error)
       addToast('Failed to log purchase', 'error')
@@ -162,6 +197,17 @@ export default function PurchasedItems() {
       setSubmitting(false)
     }
   }
+
+  // Get product name by ID
+  const getProductName = (productId) => {
+    const product = products.find(p => p.id === productId)
+    if (!product) return ''
+    return `${product.brand} - ${product.name} (${product.language})`
+  }
+
+  // Calculate totals
+  const totalCost = lineItems.reduce((sum, item) => sum + (parseFloat(item.cost) || 0), 0)
+  const totalItems = lineItems.filter(i => i.product_id).length
 
   if (loading) {
     return (
@@ -180,147 +226,177 @@ export default function PurchasedItems() {
           <ShoppingCart className="text-blue-400" />
           Purchased Items
         </h1>
-        <p className="text-gray-400 mt-1">Log new inventory purchases</p>
+        <p className="text-gray-400 mt-1">Log new inventory purchases (supports multiple items)</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="card max-w-2xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Date Purchased *
-            </label>
-            <input
-              type="date"
-              name="date_purchased"
-              value={form.date_purchased}
-              onChange={handleChange}
-              required
-            />
-          </div>
+      <form onSubmit={handleSubmit}>
+        {/* Header Section */}
+        <div className="card mb-6">
+          <h2 className="font-display text-lg font-semibold text-white mb-4">Purchase Details</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Date Purchased *
+              </label>
+              <input
+                type="date"
+                name="date_purchased"
+                value={header.date_purchased}
+                onChange={handleHeaderChange}
+                required
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Acquirer *
-            </label>
-            <select
-              name="acquirer_id"
-              value={form.acquirer_id}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select acquirer...</option>
-              {users.map(user => (
-                <option key={user.id} value={user.id}>{user.name}</option>
-              ))}
-            </select>
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Acquirer *
+              </label>
+              <select
+                name="acquirer_id"
+                value={header.acquirer_id}
+                onChange={handleHeaderChange}
+                required
+              >
+                <option value="">Select acquirer...</option>
+                {users.map(user => (
+                  <option key={user.id} value={user.id}>{user.name}</option>
+                ))}
+              </select>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Source Country *
-            </label>
-            <select
-              name="source_country"
-              value={form.source_country}
-              onChange={handleChange}
-              required
-            >
-              <option value="USA">USA</option>
-              <option value="Japan">Japan</option>
-              <option value="China">China</option>
-            </select>
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Source Country *
+              </label>
+              <select
+                name="source_country"
+                value={header.source_country}
+                onChange={handleHeaderChange}
+                required
+              >
+                <option value="USA">USA</option>
+                <option value="Japan">Japan</option>
+                <option value="China">China</option>
+              </select>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Vendor (optional)
-            </label>
-            {showNewVendor ? (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newVendorName}
-                  onChange={(e) => setNewVendorName(e.target.value)}
-                  placeholder="Vendor name..."
-                  className="flex-1"
-                />
-                <select
-                  value={newVendorCountry}
-                  onChange={(e) => setNewVendorCountry(e.target.value)}
-                  className="w-24"
-                >
-                  <option value="USA">USA</option>
-                  <option value="Japan">Japan</option>
-                  <option value="China">China</option>
-                </select>
-                <button type="button" onClick={handleAddVendor} className="btn btn-primary p-2">
-                  <Save size={18} />
-                </button>
-                <button type="button" onClick={() => setShowNewVendor(false)} className="btn btn-secondary p-2">
-                  <X size={18} />
-                </button>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <select
-                  name="vendor_id"
-                  value={form.vendor_id}
-                  onChange={handleChange}
-                  className="flex-1"
-                >
-                  <option value="">Select vendor...</option>
-                  {vendors.map(vendor => (
-                    <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
-                  ))}
-                </select>
-                <button 
-                  type="button" 
-                  onClick={() => setShowNewVendor(true)}
-                  className="btn btn-secondary p-2"
-                  title="Add new vendor"
-                >
-                  <Plus size={18} />
-                </button>
-              </div>
-            )}
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Vendor (optional)
+              </label>
+              {showNewVendor ? (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newVendorName}
+                    onChange={(e) => setNewVendorName(e.target.value)}
+                    placeholder="Vendor name..."
+                    className="flex-1"
+                  />
+                  <select
+                    value={newVendorCountry}
+                    onChange={(e) => setNewVendorCountry(e.target.value)}
+                    className="w-24"
+                  >
+                    <option value="USA">USA</option>
+                    <option value="Japan">Japan</option>
+                    <option value="China">China</option>
+                  </select>
+                  <button type="button" onClick={handleAddVendor} className="btn btn-primary p-2">
+                    <Save size={18} />
+                  </button>
+                  <button type="button" onClick={() => setShowNewVendor(false)} className="btn btn-secondary p-2">
+                    <X size={18} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <select
+                    name="vendor_id"
+                    value={header.vendor_id}
+                    onChange={handleHeaderChange}
+                    className="flex-1"
+                  >
+                    <option value="">Select vendor...</option>
+                    {vendors.map(vendor => (
+                      <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
+                    ))}
+                  </select>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowNewVendor(true)}
+                    className="btn btn-secondary p-2"
+                    title="Add new vendor"
+                  >
+                    <Plus size={18} />
+                  </button>
+                </div>
+              )}
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Payment Method (optional)
-            </label>
-            <select
-              name="payment_method_id"
-              value={form.payment_method_id}
-              onChange={handleChange}
-            >
-              <option value="">Select payment method...</option>
-              {paymentMethods.map(pm => (
-                <option key={pm.id} value={pm.id}>{pm.name}</option>
-              ))}
-            </select>
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Payment Method (optional)
+              </label>
+              <select
+                name="payment_method_id"
+                value={header.payment_method_id}
+                onChange={handleHeaderChange}
+              >
+                <option value="">Select payment method...</option>
+                {paymentMethods.map(pm => (
+                  <option key={pm.id} value={pm.id}>{pm.name}</option>
+                ))}
+              </select>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Currency *
-            </label>
-            <select
-              name="currency"
-              value={form.currency}
-              onChange={handleChange}
-              required
-            >
-              <option value="USD">USD ($)</option>
-              <option value="JPY">JPY (¥)</option>
-              <option value="RMB">RMB (¥)</option>
-            </select>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Currency *
+              </label>
+              <select
+                name="currency"
+                value={header.currency}
+                onChange={handleHeaderChange}
+                required
+              >
+                <option value="USD">USD ($)</option>
+                <option value="JPY">JPY (¥)</option>
+                <option value="RMB">RMB (¥)</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <div className="mt-6 pt-6 border-t border-vault-border">
-          <h3 className="font-display text-lg font-semibold text-white mb-4">Product Selection</h3>
-          
+        {/* Product Selection with Search */}
+        <div className="card mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="font-display text-lg font-semibold text-white">Products</h2>
+            <button
+              type="button"
+              onClick={addLineItem}
+              className="btn btn-secondary text-sm"
+            >
+              <Plus size={16} /> Add Another Item
+            </button>
+          </div>
+
+          {/* Search Bar */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search products by name, brand, type..."
+                className="pl-10 w-full"
+              />
+            </div>
+          </div>
+
+          {/* Filters */}
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Brand</label>
@@ -351,84 +427,123 @@ export default function PurchasedItems() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Product *
-            </label>
-            <select
-              name="product_id"
-              value={form.product_id}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select product...</option>
-              {filteredProducts
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map(product => (
-                <option key={product.id} value={product.id}>
-                  {product.brand} - {product.type} - {product.name} - {product.category} ({product.language})
-                </option>
-              ))}
-            </select>
+          {/* Line Items */}
+          <div className="space-y-3">
+            {lineItems.map((item, index) => (
+              <div 
+                key={item.id} 
+                className="p-4 bg-vault-dark rounded-lg border border-vault-border"
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-vault-gold font-semibold text-sm">Item {index + 1}</span>
+                  {lineItems.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeLineItem(item.id)}
+                      className="ml-auto p-1 text-gray-500 hover:text-red-400"
+                      title="Remove item"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Product *</label>
+                    <select
+                      value={item.product_id}
+                      onChange={(e) => updateLineItem(item.id, 'product_id', e.target.value)}
+                      className="w-full text-sm"
+                    >
+                      <option value="">Select product...</option>
+                      {filteredProducts
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(product => (
+                        <option key={product.id} value={product.id}>
+                          {product.brand} - {product.type} - {product.name} ({product.language})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Qty *</label>
+                    <input
+                      type="number"
+                      value={item.quantity}
+                      onChange={(e) => updateLineItem(item.id, 'quantity', e.target.value)}
+                      min="1"
+                      className="w-full text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Cost ({header.currency}) *</label>
+                    <input
+                      type="number"
+                      value={item.cost}
+                      onChange={(e) => updateLineItem(item.id, 'cost', e.target.value)}
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      className="w-full text-sm"
+                    />
+                  </div>
+                </div>
+                
+                <div className="mt-3">
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Notes (optional)</label>
+                  <input
+                    type="text"
+                    value={item.notes}
+                    onChange={(e) => updateLineItem(item.id, 'notes', e.target.value)}
+                    placeholder="Optional notes for this item..."
+                    className="w-full text-sm"
+                  />
+                </div>
+              </div>
+            ))}
           </div>
+
+          {/* Add more button */}
+          <button
+            type="button"
+            onClick={addLineItem}
+            className="w-full mt-3 py-2 border-2 border-dashed border-vault-border rounded-lg text-gray-400 hover:text-white hover:border-vault-gold transition-colors"
+          >
+            <Plus size={16} className="inline mr-2" />
+            Add Another Item
+          </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Quantity *
-            </label>
-            <input
-              type="number"
-              name="quantity_purchased"
-              value={form.quantity_purchased}
-              onChange={handleChange}
-              min="1"
-              required
-            />
+        {/* Summary & Submit */}
+        <div className="card">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <span className="text-gray-400">Total Items:</span>
+              <span className="text-white font-semibold ml-2">{totalItems}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Total Cost:</span>
+              <span className="text-vault-gold font-semibold ml-2">
+                {header.currency === 'USD' && '$'}
+                {header.currency === 'JPY' && '¥'}
+                {header.currency === 'RMB' && '¥'}
+                {totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Total Cost ({form.currency}) *
-            </label>
-            <input
-              type="number"
-              name="cost"
-              value={form.cost}
-              onChange={handleChange}
-              min="0"
-              step="0.01"
-              placeholder="0.00"
-              required
-            />
-          </div>
-        </div>
 
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Notes (optional)
-          </label>
-          <textarea
-            name="notes"
-            value={form.notes}
-            onChange={handleChange}
-            rows={2}
-            placeholder="Optional notes..."
-          />
-        </div>
-
-        <div className="mt-6">
           <button 
             type="submit" 
             className="btn btn-primary w-full"
-            disabled={submitting}
+            disabled={submitting || totalItems === 0}
           >
             {submitting ? (
               <div className="spinner w-5 h-5 border-2"></div>
             ) : (
               <>
                 <Save size={20} />
-                Log Purchase
+                Log {totalItems} Purchase{totalItems !== 1 ? 's' : ''}
               </>
             )}
           </button>
