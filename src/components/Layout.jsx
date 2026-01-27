@@ -36,13 +36,12 @@ const navItems = [
   { path: '/intake', label: 'Intake to Master', icon: Package },
   { path: '/move-inventory', label: 'Move Inventory', icon: ArrowRightLeft },
   { path: '/break-box', label: 'Break Box', icon: Box },
-  { path: '/grading', label: 'Send to Grading', icon: Diamond },
-  { path: '/storefront-sale', label: 'Storefront Sale', icon: DollarSign },
   { path: '/inventory', label: 'View Inventory', icon: Eye },
   { path: '/high-value', label: 'High Value', icon: Star },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
   { path: '/product-mapping', label: 'Product Mapping', icon: Link2 },
   { path: '/users', label: 'Team Management', icon: Users },
+  { path: '/storefront-sale', label: 'Storefront Sale', icon: DollarSign },
 ]
 
 export default function Layout({ children }) {
