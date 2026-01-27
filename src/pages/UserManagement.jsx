@@ -16,13 +16,13 @@ const ALL_PAGES = [
   { path: '/intake', label: 'Intake to Master' },
   { path: '/move-inventory', label: 'Move Inventory' },
   { path: '/break-box', label: 'Break Box' },
-  { path: '/grading', label: 'Send to Grading' },
-  { path: '/storefront-sale', label: 'Storefront Sale' },
   { path: '/inventory', label: 'View Inventory' },
   { path: '/high-value', label: 'High Value' },
   { path: '/reports', label: 'Reports' },
   { path: '/product-mapping', label: 'Product Mapping' },
   { path: '/users', label: 'Team Management' },
+  { path: '/storefront-sale', label: 'Storefront Sale' },
+  { path: '/grading', label: 'Send to Grading (Admin)' },
 ]
 
 export default function UserManagement() {
