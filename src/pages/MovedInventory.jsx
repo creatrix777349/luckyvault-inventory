@@ -7,7 +7,7 @@ import {
   updateInventory
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { ArrowRightLeft, ArrowRight, Save } from 'lucide-react'
+import { ArrowRightLeft, ArrowRight, Save, Search } from 'lucide-react'
 
 // Only show these locations in the Move Inventory page
 const ALLOWED_LOCATION_NAMES = [
@@ -44,6 +44,8 @@ export default function MovedInventory() {
     brand: '',
     type: ''
   })
+
+  const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
     loadData()
@@ -92,6 +94,16 @@ export default function MovedInventory() {
   }
 
   const filteredInventory = inventory.filter(inv => {
+    // Search filter
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase()
+      const matchesSearch = 
+        inv.product?.name?.toLowerCase().includes(search) ||
+        inv.product?.brand?.toLowerCase().includes(search) ||
+        inv.product?.type?.toLowerCase().includes(search) ||
+        inv.product?.category?.toLowerCase().includes(search)
+      if (!matchesSearch) return false
+    }
     if (productFilters.brand && inv.product?.brand !== productFilters.brand) return false
     if (productFilters.type && inv.product?.type !== productFilters.type) return false
     return true
@@ -252,6 +264,20 @@ export default function MovedInventory() {
         {form.from_location_id && (
           <div className="pt-6 border-t border-vault-border">
             <h3 className="font-display text-lg font-semibold text-white mb-4">Select Product</h3>
+            
+            {/* Search Bar */}
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search products..."
+                  className="pl-10 w-full"
+                />
+              </div>
+            </div>
             
             {/* Filters */}
             <div className="grid grid-cols-2 gap-4 mb-4">
