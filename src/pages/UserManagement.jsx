@@ -121,7 +121,6 @@ export default function UserManagement() {
         .from('users')
         .insert({
           name: newUser.name.trim(),
-          role: newUser.role,
           pin: pin,
           active: true,
           can_login: true,
@@ -188,7 +187,6 @@ export default function UserManagement() {
         .from('users')
         .update({
           name: editingUser.name.trim(),
-          role: editingUser.role,
           pin: editingUser.pin,
           allowed_pages: editingUser.allowed_pages
         })
@@ -321,7 +319,7 @@ export default function UserManagement() {
           <h2 className="font-display text-lg font-semibold text-white mb-4">Add New User</h2>
           
           <form onSubmit={handleAddUser} className="space-y-4">
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Name *</label>
                 <input
@@ -331,18 +329,6 @@ export default function UserManagement() {
                   placeholder="e.g., Michelle"
                   required
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Role</label>
-                <select
-                  value={newUser.role}
-                  onChange={(e) => setNewUser(u => ({ ...u, role: e.target.value }))}
-                >
-                  <option value="Streamer">Streamer</option>
-                  <option value="Counter">Counter</option>
-                  <option value="Manager">Manager</option>
-                  <option value="Admin">Admin</option>
-                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">PIN (4 digits)</label>
@@ -411,27 +397,19 @@ export default function UserManagement() {
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Role</th>
                   <th>PIN</th>
-                  <th>Access</th>
+                  <th>Page Access</th>
                   <th className="w-32">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {activeUsers.map(user => {
                   const pageCount = (user.allowed_pages || []).length
+                  const hasFullAccess = user.allowed_pages?.includes('/users')
                   
                   return (
                     <tr key={user.id}>
                       <td className="font-medium text-white">{user.name}</td>
-                      <td>
-                        <span className={`badge ${
-                          user.role === 'Admin' ? 'badge-warning' :
-                          user.role === 'Manager' ? 'badge-info' : 'badge-secondary'
-                        }`}>
-                          {user.role || 'Streamer'}
-                        </span>
-                      </td>
                       <td>
                         <div className="flex items-center gap-2">
                           <code className="bg-vault-dark px-2 py-1 rounded text-vault-gold">
@@ -448,8 +426,8 @@ export default function UserManagement() {
                       </td>
                       <td>
                         <span className="text-gray-400 text-sm">
-                          {user.role === 'Admin' ? (
-                            <span className="text-vault-gold">Full Access</span>
+                          {hasFullAccess ? (
+                            <span className="text-vault-gold">Full Access (Admin)</span>
                           ) : (
                             `${pageCount} page${pageCount !== 1 ? 's' : ''}`
                           )}
@@ -536,7 +514,7 @@ export default function UserManagement() {
             
             <div className="p-4 space-y-4 overflow-y-auto max-h-[60vh]">
               {/* Basic Info */}
-              <div className="grid md:grid-cols-3 gap-4">
+              <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Name</label>
                   <input
@@ -544,18 +522,6 @@ export default function UserManagement() {
                     value={editingUser.name}
                     onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Role</label>
-                  <select
-                    value={editingUser.role || 'Streamer'}
-                    onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
-                  >
-                    <option value="Streamer">Streamer</option>
-                    <option value="Counter">Counter</option>
-                    <option value="Manager">Manager</option>
-                    <option value="Admin">Admin</option>
-                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">PIN</label>
@@ -601,25 +567,20 @@ export default function UserManagement() {
                   </div>
                 </div>
                 
-                {editingUser.role === 'Admin' ? (
-                  <p className="text-vault-gold text-sm p-3 bg-vault-gold/10 rounded-lg">
-                    ✓ Admins have full access to all pages
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2 p-3 bg-vault-dark rounded-lg max-h-64 overflow-y-auto">
-                    {ALL_PAGES.map(page => (
-                      <label 
-                        key={page.path} 
-                        className={`flex items-center gap-2 cursor-pointer p-2 rounded transition-all ${
-                          editingUser.allowed_pages?.includes(page.path) 
-                            ? 'bg-vault-gold/10 border border-vault-gold/30' 
-                            : 'hover:bg-vault-surface'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={editingUser.allowed_pages?.includes(page.path) || false}
-                          onChange={() => togglePageAccess(page.path)}
+                <div className="grid grid-cols-2 gap-2 p-3 bg-vault-dark rounded-lg max-h-64 overflow-y-auto">
+                  {ALL_PAGES.map(page => (
+                    <label 
+                      key={page.path} 
+                      className={`flex items-center gap-2 cursor-pointer p-2 rounded transition-all ${
+                        editingUser.allowed_pages?.includes(page.path) 
+                          ? 'bg-vault-gold/10 border border-vault-gold/30' 
+                          : 'hover:bg-vault-surface'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editingUser.allowed_pages?.includes(page.path) || false}
+                        onChange={() => togglePageAccess(page.path)}
                           className="w-4 h-4 rounded border-vault-border bg-vault-surface text-vault-gold focus:ring-vault-gold"
                         />
                         <span className={`text-sm ${
@@ -630,7 +591,6 @@ export default function UserManagement() {
                       </label>
                     ))}
                   </div>
-                )}
               </div>
             </div>
             
