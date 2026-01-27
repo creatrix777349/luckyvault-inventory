@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useAuth } from '../lib/AuthContext'
 import { 
   Home, 
   Package, 
@@ -20,7 +21,8 @@ import {
   ClipboardList,
   TrendingUp,
   Link2,
-  Users
+  Users,
+  LogOut
 } from 'lucide-react'
 
 const navItems = [
@@ -46,8 +48,18 @@ const navItems = [
 export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
+  const { user, hasAccess, logout } = useAuth()
 
   const isActive = (path) => location.pathname === path
+
+  // Filter nav items based on user permissions
+  const visibleNavItems = navItems.filter(item => hasAccess(item.path))
+
+  const handleLogout = () => {
+    if (confirm('Are you sure you want to logout?')) {
+      logout()
+    }
+  }
 
   return (
     <div className="min-h-screen flex">
@@ -63,7 +75,7 @@ export default function Layout({ children }) {
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-40
         w-64 bg-vault-darker border-r border-vault-border
-        transform transition-transform duration-300 ease-in-out
+        transform transition-transform duration-300 ease-in-out flex flex-col
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/* Logo */}
@@ -80,8 +92,8 @@ export default function Layout({ children }) {
         </div>
 
         {/* Navigation */}
-        <nav className="p-4 space-y-1 overflow-y-auto h-[calc(100vh-100px)]">
-          {navItems.map((item) => (
+        <nav className="p-4 space-y-1 overflow-y-auto flex-1">
+          {visibleNavItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
@@ -98,6 +110,30 @@ export default function Layout({ children }) {
             </Link>
           ))}
         </nav>
+
+        {/* User Info & Logout */}
+        <div className="p-4 border-t border-vault-border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-vault-gold/20 flex items-center justify-center flex-shrink-0">
+                <span className="text-vault-gold text-sm font-semibold">
+                  {user?.name?.charAt(0)?.toUpperCase() || '?'}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-white text-sm font-medium truncate">{user?.name || 'User'}</p>
+                <p className="text-gray-500 text-xs">{user?.role || 'Member'}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="p-2 text-gray-400 hover:text-red-400 transition-colors"
+              title="Logout"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        </div>
       </aside>
 
       {/* Mobile overlay */}
