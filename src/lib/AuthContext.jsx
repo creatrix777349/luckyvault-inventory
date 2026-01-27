@@ -74,14 +74,17 @@ export function AuthProvider({ children }) {
 
   const hasAccess = (path) => {
     if (!user) return false
-    if (user.role === 'Admin') return true
     
     const allowedPages = user.allowed_pages || []
+    // If user has access to /users (Team Management), they're effectively admin
+    if (allowedPages.includes('/users')) return true
+    
     return allowedPages.includes(path)
   }
 
   const isAdmin = () => {
-    return user?.role === 'Admin'
+    // Admin is anyone who has access to Team Management
+    return user?.allowed_pages?.includes('/users')
   }
 
   const verifyAdminPin = async (pin) => {
@@ -90,11 +93,14 @@ export function AuthProvider({ children }) {
         .from('users')
         .select('*')
         .eq('pin', pin)
-        .eq('role', 'Admin')
         .eq('active', true)
         .single()
       
-      return !error && data
+      // Check if user has Team Management access (admin)
+      if (!error && data && data.allowed_pages?.includes('/users')) {
+        return true
+      }
+      return false
     } catch (e) {
       return false
     }
