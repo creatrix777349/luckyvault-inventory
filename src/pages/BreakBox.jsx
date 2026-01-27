@@ -8,7 +8,7 @@ import {
   updateInventory
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { Box, ArrowDown, Save, AlertCircle, Package } from 'lucide-react'
+import { Box, ArrowDown, Save, AlertCircle, Package, Search } from 'lucide-react'
 
 export default function BreakBox() {
   const { toasts, addToast, removeToast } = useToast()
@@ -27,6 +27,8 @@ export default function BreakBox() {
     manual_pack_count: '',
     notes: ''
   })
+
+  const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
     loadData()
@@ -262,6 +264,21 @@ export default function BreakBox() {
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Sealed Product * (breakable items in Master Inventory)
           </label>
+          
+          {/* Search Bar */}
+          <div className="mb-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search products..."
+                className="pl-10 w-full"
+              />
+            </div>
+          </div>
+          
           {inventory.length === 0 ? (
             <div className="p-4 bg-vault-dark rounded-lg border border-vault-border text-gray-400 text-sm">
               No breakable products in Master Inventory
@@ -275,6 +292,15 @@ export default function BreakBox() {
             >
               <option value="">Select product...</option>
               {inventory
+                .filter(inv => {
+                  if (!searchTerm) return true
+                  const search = searchTerm.toLowerCase()
+                  return (
+                    inv.product?.name?.toLowerCase().includes(search) ||
+                    inv.product?.brand?.toLowerCase().includes(search) ||
+                    inv.product?.category?.toLowerCase().includes(search)
+                  )
+                })
                 .sort((a, b) => (a.product?.name || '').localeCompare(b.product?.name || ''))
                 .map(inv => (
                 <option key={inv.id} value={inv.product_id}>
