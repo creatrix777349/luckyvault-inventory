@@ -10,7 +10,8 @@ import {
   getExchangeRates
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { ShoppingCart, Plus, Save, X, Search, Trash2 } from 'lucide-react'
+import SearchableSelect from '../components/SearchableSelect'
+import { ShoppingCart, Plus, Save, X, Trash2 } from 'lucide-react'
 
 export default function PurchasedItems() {
   const { toasts, addToast, removeToast } = useToast()
@@ -24,9 +25,6 @@ export default function PurchasedItems() {
   const [showNewVendor, setShowNewVendor] = useState(false)
   const [newVendorName, setNewVendorName] = useState('')
   const [newVendorCountry, setNewVendorCountry] = useState('USA')
-
-  // Search state
-  const [searchTerm, setSearchTerm] = useState('')
 
   // Header form (shared across all line items)
   const [header, setHeader] = useState({
@@ -85,20 +83,8 @@ export default function PurchasedItems() {
     setProductFilters(f => ({ ...f, [name]: value }))
   }
 
-  // Filter products by search term and filters
+  // Filter products based on filters
   const filteredProducts = products.filter(p => {
-    // Search filter
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase()
-      const matchesSearch = 
-        p.name?.toLowerCase().includes(search) ||
-        p.brand?.toLowerCase().includes(search) ||
-        p.type?.toLowerCase().includes(search) ||
-        p.category?.toLowerCase().includes(search)
-      if (!matchesSearch) return false
-    }
-    
-    // Dropdown filters
     if (productFilters.brand && p.brand !== productFilters.brand) return false
     if (productFilters.type && p.type !== productFilters.type) return false
     if (productFilters.language && p.language !== productFilters.language) return false
@@ -198,12 +184,18 @@ export default function PurchasedItems() {
     }
   }
 
-  // Get product name by ID
-  const getProductName = (productId) => {
-    const product = products.find(p => p.id === productId)
-    if (!product) return ''
-    return `${product.brand} - ${product.name} (${product.language})`
-  }
+  // Format product for display
+  const formatProductOption = (product) => (
+    <div>
+      <span className="text-vault-gold">{product.brand}</span>
+      <span className="text-gray-400"> - {product.type} - </span>
+      <span className="text-white">{product.name}</span>
+      <span className="text-gray-500"> ({product.language})</span>
+    </div>
+  )
+
+  const getProductLabel = (product) => 
+    `${product.brand} - ${product.type} - ${product.name} (${product.language})`
 
   // Calculate totals
   const totalCost = lineItems.reduce((sum, item) => sum + (parseFloat(item.cost) || 0), 0)
@@ -369,7 +361,7 @@ export default function PurchasedItems() {
           </div>
         </div>
 
-        {/* Product Selection with Search */}
+        {/* Product Selection */}
         <div className="card mb-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="font-display text-lg font-semibold text-white">Products</h2>
@@ -380,20 +372,6 @@ export default function PurchasedItems() {
             >
               <Plus size={16} /> Add Another Item
             </button>
-          </div>
-
-          {/* Search Bar */}
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search products by name, brand, type..."
-                className="pl-10 w-full"
-              />
-            </div>
           </div>
 
           {/* Filters */}
@@ -451,20 +429,15 @@ export default function PurchasedItems() {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div className="md:col-span-2">
                     <label className="block text-xs font-medium text-gray-400 mb-1">Product *</label>
-                    <select
+                    <SearchableSelect
+                      options={filteredProducts}
                       value={item.product_id}
-                      onChange={(e) => updateLineItem(item.id, 'product_id', e.target.value)}
-                      className="w-full text-sm"
-                    >
-                      <option value="">Select product...</option>
-                      {filteredProducts
-                        .sort((a, b) => a.name.localeCompare(b.name))
-                        .map(product => (
-                        <option key={product.id} value={product.id}>
-                          {product.brand} - {product.type} - {product.name} ({product.language})
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(val) => updateLineItem(item.id, 'product_id', val)}
+                      placeholder="Type to search products..."
+                      getOptionValue={(p) => p.id}
+                      getOptionLabel={getProductLabel}
+                      renderOption={formatProductOption}
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-400 mb-1">Qty *</label>
