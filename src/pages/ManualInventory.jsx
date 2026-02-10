@@ -7,7 +7,8 @@ import {
   supabase
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { PackagePlus, Save, Star, Search, Plus, Trash2 } from 'lucide-react'
+import SearchableSelect from '../components/SearchableSelect'
+import { PackagePlus, Save, Star, Plus, Trash2 } from 'lucide-react'
 
 // Grade options for slabs
 const GRADE_OPTIONS = [
@@ -43,7 +44,6 @@ export default function ManualInventory() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [mode, setMode] = useState('single') // 'single' or 'bulk'
-  const [searchTerm, setSearchTerm] = useState('')
 
   const [form, setForm] = useState({
     product_id: '',
@@ -114,24 +114,11 @@ export default function ManualInventory() {
   const currentMarketPriceNum = form.current_market_price ? parseFloat(form.current_market_price) : 0
   const isHighValue = currentMarketPriceNum >= 200
 
-  // Filter products
+  // Filter products for dropdown
   const filteredProducts = products.filter(p => {
-    // Search filter
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase()
-      const matchesSearch = 
-        p.name?.toLowerCase().includes(search) ||
-        p.brand?.toLowerCase().includes(search) ||
-        p.type?.toLowerCase().includes(search) ||
-        p.category?.toLowerCase().includes(search)
-      if (!matchesSearch) return false
-    }
-    
-    // Dropdown filters
     if (productFilters.brand && p.brand !== productFilters.brand) return false
     if (productFilters.type && p.type !== productFilters.type) return false
     if (productFilters.language && p.language !== productFilters.language) return false
-    // For slabs, filter by grading company (category)
     if (isSlab && form.grading_company && p.category !== form.grading_company) return false
     return true
   })
@@ -304,6 +291,19 @@ export default function ManualInventory() {
     }
   }
 
+  // Format product for display
+  const formatProductOption = (product) => (
+    <div>
+      <span className="text-vault-gold">{product.brand}</span>
+      <span className="text-gray-400"> - {product.type} - </span>
+      <span className="text-white">{product.name}</span>
+      <span className="text-gray-500"> ({product.language})</span>
+    </div>
+  )
+
+  const getProductLabel = (product) => 
+    `${product.brand} - ${product.type} - ${product.name} (${product.language})`
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -372,20 +372,6 @@ export default function ManualInventory() {
           {/* Product Selection */}
           <div className="pt-4 border-t border-vault-border">
             <h3 className="font-display text-lg font-semibold text-white mb-4">Product Selection</h3>
-            
-            {/* Search Bar */}
-            <div className="mb-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search products..."
-                  className="pl-10 w-full"
-                />
-              </div>
-            </div>
             
             {/* Filters */}
             <div className="grid grid-cols-3 gap-4 mb-4">
@@ -492,25 +478,19 @@ export default function ManualInventory() {
               </div>
             )}
 
-            {/* Product dropdown - only show for non-slabs */}
+            {/* Product Search - only for non-slabs */}
             {!isSlab && (
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Product *</label>
-                <select
-                  name="product_id"
+                <SearchableSelect
+                  options={filteredProducts}
                   value={form.product_id}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="">Select product...</option>
-                  {filteredProducts
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map(product => (
-                    <option key={product.id} value={product.id}>
-                      {product.brand} - {product.type} - {product.name} - {product.category} ({product.language})
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setForm(f => ({ ...f, product_id: val }))}
+                  placeholder="Type to search products..."
+                  getOptionValue={(p) => p.id}
+                  getOptionLabel={getProductLabel}
+                  renderOption={formatProductOption}
+                />
               </div>
             )}
           </div>
@@ -596,20 +576,6 @@ export default function ManualInventory() {
               </select>
             </div>
 
-            {/* Search Bar */}
-            <div className="mb-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search products..."
-                  className="pl-10 w-full"
-                />
-              </div>
-            </div>
-
             {/* Bulk Items */}
             <div className="space-y-3">
               {bulkItems.map((item, index) => (
@@ -630,20 +596,15 @@ export default function ManualInventory() {
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                     <div className="md:col-span-2">
                       <label className="block text-xs font-medium text-gray-400 mb-1">Product *</label>
-                      <select
+                      <SearchableSelect
+                        options={products}
                         value={item.product_id}
-                        onChange={(e) => updateBulkItem(item.id, 'product_id', e.target.value)}
-                        className="w-full text-sm"
-                      >
-                        <option value="">Select product...</option>
-                        {filteredProducts
-                          .sort((a, b) => a.name.localeCompare(b.name))
-                          .map(product => (
-                          <option key={product.id} value={product.id}>
-                            {product.brand} - {product.name} ({product.language})
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(val) => updateBulkItem(item.id, 'product_id', val)}
+                        placeholder="Search products..."
+                        getOptionValue={(p) => p.id}
+                        getOptionLabel={getProductLabel}
+                        renderOption={formatProductOption}
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-400 mb-1">Qty *</label>
