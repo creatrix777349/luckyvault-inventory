@@ -27,21 +27,21 @@ import {
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: Home },
+  { path: '/inventory', label: 'View Inventory', icon: Eye },
+  { path: '/move-inventory', label: 'Move Inventory', icon: ArrowRightLeft },
+  { path: '/manual-inventory', label: 'Manual Inventory', icon: PackagePlus },
   { path: '/stream-counts', label: 'Stream Counts', icon: ClipboardList },
   { path: '/platform-sales', label: 'Platform Sales', icon: TrendingUp },
   { path: '/add-product', label: 'Add Product', icon: Plus },
-  { path: '/manual-inventory', label: 'Manual Inventory', icon: PackagePlus },
   { path: '/purchased-items', label: 'Purchased Items', icon: ShoppingCart },
-  { path: '/expenses', label: 'Business Expenses', icon: Receipt },
   { path: '/intake', label: 'Intake to Master', icon: Package },
-  { path: '/move-inventory', label: 'Move Inventory', icon: ArrowRightLeft },
   { path: '/break-box', label: 'Break Box', icon: Box },
-  { path: '/inventory', label: 'View Inventory', icon: Eye },
   { path: '/high-value', label: 'High Value', icon: Star },
-  { path: '/reports', label: 'Reports', icon: BarChart3 },
   { path: '/product-mapping', label: 'Product Mapping', icon: Link2 },
-  { path: '/users', label: 'Team Management', icon: Users },
+  { path: '/expenses', label: 'Business Expenses', icon: Receipt },
   { path: '/storefront-sale', label: 'Storefront Sale', icon: DollarSign },
+  { path: '/reports', label: 'Reports', icon: BarChart3 },
+  { path: '/users', label: 'Team Management', icon: Users },
 ]
 
 export default function Layout({ children }) {
