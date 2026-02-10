@@ -7,7 +7,8 @@ import {
   updateInventory
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { ArrowRightLeft, ArrowRight, Save, Search } from 'lucide-react'
+import SearchableSelect from '../components/SearchableSelect'
+import { ArrowRightLeft, ArrowRight, Save } from 'lucide-react'
 
 // Only show these locations in the Move Inventory page
 const ALLOWED_LOCATION_NAMES = [
@@ -44,8 +45,6 @@ export default function MovedInventory() {
     brand: '',
     type: ''
   })
-
-  const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
     loadData()
@@ -94,16 +93,6 @@ export default function MovedInventory() {
   }
 
   const filteredInventory = inventory.filter(inv => {
-    // Search filter
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase()
-      const matchesSearch = 
-        inv.product?.name?.toLowerCase().includes(search) ||
-        inv.product?.brand?.toLowerCase().includes(search) ||
-        inv.product?.type?.toLowerCase().includes(search) ||
-        inv.product?.category?.toLowerCase().includes(search)
-      if (!matchesSearch) return false
-    }
     if (productFilters.brand && inv.product?.brand !== productFilters.brand) return false
     if (productFilters.type && inv.product?.type !== productFilters.type) return false
     return true
@@ -265,20 +254,6 @@ export default function MovedInventory() {
           <div className="pt-6 border-t border-vault-border">
             <h3 className="font-display text-lg font-semibold text-white mb-4">Select Product</h3>
             
-            {/* Search Bar */}
-            <div className="mb-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search products..."
-                  className="pl-10 w-full"
-                />
-              </div>
-            </div>
-            
             {/* Filters */}
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
@@ -306,21 +281,23 @@ export default function MovedInventory() {
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Product * (showing items in stock)
               </label>
-              <select
-                name="product_id"
+              <SearchableSelect
+                options={filteredInventory}
                 value={form.product_id}
-                onChange={handleChange}
-                required
-              >
-                <option value="">Select product...</option>
-                {filteredInventory
-                  .sort((a, b) => (a.product?.name || '').localeCompare(b.product?.name || ''))
-                  .map(inv => (
-                  <option key={inv.id} value={inv.product_id}>
-                    {inv.product?.brand} - {inv.product?.type} - {inv.product?.name} - {inv.product?.category} ({inv.product?.language}) - {inv.quantity} avail
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setForm(f => ({ ...f, product_id: val, quantity: 1 }))}
+                placeholder="Type to search products..."
+                getOptionValue={(inv) => inv.product_id}
+                getOptionLabel={(inv) => `${inv.product?.brand} - ${inv.product?.name} (${inv.product?.language}) - ${inv.quantity} avail`}
+                renderOption={(inv) => (
+                  <div>
+                    <span className="text-vault-gold">{inv.product?.brand}</span>
+                    <span className="text-gray-400"> - </span>
+                    <span className="text-white">{inv.product?.name}</span>
+                    <span className="text-gray-500"> ({inv.product?.language})</span>
+                    <span className="text-green-400 ml-2">• {inv.quantity} avail</span>
+                  </div>
+                )}
+              />
             </div>
 
             {/* Quantity */}
