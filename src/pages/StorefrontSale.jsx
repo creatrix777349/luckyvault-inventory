@@ -5,7 +5,8 @@ import {
   supabase
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { DollarSign, Save, TrendingUp, TrendingDown, Search } from 'lucide-react'
+import SearchableSelect from '../components/SearchableSelect'
+import { DollarSign, Save, TrendingUp, TrendingDown } from 'lucide-react'
 
 export default function StorefrontSale() {
   const { toasts, addToast, removeToast } = useToast()
@@ -41,8 +42,6 @@ export default function StorefrontSale() {
     type: '',
     language: ''
   })
-
-  const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
     loadData()
@@ -83,22 +82,9 @@ export default function StorefrontSale() {
     setProductForm(f => ({ ...f, inventory_id: '' }))
   }
 
-  // Filter inventory based on product filters and search
+  // Filter inventory based on product filters
   const filteredInventory = inventory.filter(inv => {
     if (!inv.product) return false
-    
-    // Search filter
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase()
-      const matchesSearch = 
-        inv.product?.name?.toLowerCase().includes(search) ||
-        inv.product?.brand?.toLowerCase().includes(search) ||
-        inv.product?.type?.toLowerCase().includes(search) ||
-        inv.product?.category?.toLowerCase().includes(search) ||
-        inv.location?.name?.toLowerCase().includes(search)
-      if (!matchesSearch) return false
-    }
-    
     if (productFilters.brand && inv.product.brand !== productFilters.brand) return false
     if (productFilters.type && inv.product.type !== productFilters.type) return false
     if (productFilters.language && inv.product.language !== productFilters.language) return false
@@ -383,20 +369,6 @@ export default function StorefrontSale() {
           <div className="pt-4 border-t border-vault-border">
             <h3 className="font-display text-lg font-semibold text-white mb-4">Product Selection</h3>
             
-            {/* Search Bar */}
-            <div className="mb-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search products..."
-                  className="pl-10 w-full"
-                />
-              </div>
-            </div>
-            
             <div className="grid grid-cols-3 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Brand</label>
@@ -431,21 +403,25 @@ export default function StorefrontSale() {
             {/* Product Dropdown - shows ALL inventory with location */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-300 mb-2">Product *</label>
-              <select
-                name="inventory_id"
+              <SearchableSelect
+                options={filteredInventory}
                 value={productForm.inventory_id}
-                onChange={handleProductFormChange}
-                required
-              >
-                <option value="">Select product...</option>
-                {filteredInventory
-                  .sort((a, b) => (a.product?.name || '').localeCompare(b.product?.name || ''))
-                  .map(inv => (
-                  <option key={inv.id} value={inv.id}>
-                    {inv.product?.brand} - {inv.product?.type} - {inv.product?.name} ({inv.product?.language}) | {inv.quantity} @ ${inv.avg_cost_basis?.toFixed(2) || '0.00'}/ea | {inv.location?.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setProductForm(f => ({ ...f, inventory_id: val, quantity: 1 }))}
+                placeholder="Type to search products..."
+                getOptionValue={(inv) => inv.id}
+                getOptionLabel={(inv) => `${inv.product?.brand} - ${inv.product?.name} | ${inv.quantity} @ $${inv.avg_cost_basis?.toFixed(2) || '0.00'} | ${inv.location?.name}`}
+                renderOption={(inv) => (
+                  <div>
+                    <span className="text-vault-gold">{inv.product?.brand}</span>
+                    <span className="text-gray-400"> - </span>
+                    <span className="text-white">{inv.product?.name}</span>
+                    <span className="text-gray-500"> ({inv.product?.language})</span>
+                    <span className="text-green-400 ml-2">• {inv.quantity} avail</span>
+                    <span className="text-blue-400 ml-2">• ${inv.avg_cost_basis?.toFixed(2) || '0.00'}/ea</span>
+                    <span className="text-purple-400 ml-2">• {inv.location?.name}</span>
+                  </div>
+                )}
+              />
               {filteredInventory.length === 0 && (
                 <p className="text-yellow-400 text-xs mt-1">No inventory matching filters</p>
               )}
