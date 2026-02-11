@@ -3,37 +3,11 @@ import React, { useState, useEffect } from 'react'
 import { 
   fetchProducts, 
   fetchLocations,
-  updateInventory,
-  supabase
+  updateInventory
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
 import SearchableSelect from '../components/SearchableSelect'
-import { PackagePlus, Save, Star, Plus, Trash2 } from 'lucide-react'
-
-// Grade options for slabs
-const GRADE_OPTIONS = [
-  { value: '1', label: '1' },
-  { value: '2', label: '2' },
-  { value: '3', label: '3' },
-  { value: '4', label: '4' },
-  { value: '5', label: '5' },
-  { value: '6', label: '6' },
-  { value: '7', label: '7' },
-  { value: '8', label: '8' },
-  { value: '9', label: '9' },
-  { value: '10', label: '10' },
-  { value: 'Pristine 10', label: 'Pristine 10' },
-  { value: 'Black Label 10', label: 'Black Label 10' }
-]
-
-// Price bucket ranges for slabs
-const getPriceBucket = (price) => {
-  if (price >= 400) return '$400+'
-  if (price >= 200) return '$200-400'
-  if (price >= 100) return '$100-200'
-  if (price >= 50) return '$50-100'
-  return '$0-50'
-}
+import { PackagePlus, Save, Plus, Trash2 } from 'lucide-react'
 
 export default function ManualInventory() {
   
@@ -49,12 +23,7 @@ export default function ManualInventory() {
     product_id: '',
     location_id: '',
     quantity: '',
-    avg_cost_basis: '',
-    // Slab-specific fields
-    grading_company: '',
-    grade: '',
-    current_market_price: '',
-    card_name: ''
+    avg_cost_basis: ''
   })
 
   // Bulk items
@@ -79,7 +48,9 @@ export default function ManualInventory() {
         fetchProducts(),
         fetchLocations('Physical')
       ])
-      setProducts(productsData)
+      // Filter to only sealed products (no singles/slabs)
+      const sealedProducts = productsData.filter(p => p.type === 'Sealed' || p.type === 'Pack')
+      setProducts(sealedProducts)
       setLocations(locationsData)
       
       // Default to Master Inventory
@@ -107,32 +78,13 @@ export default function ManualInventory() {
     setForm(f => ({ ...f, product_id: '' }))
   }
 
-  // Check if slab type is selected
-  const isSlab = productFilters.type === 'Slab'
-  
-  // Check if high value ($200+)
-  const currentMarketPriceNum = form.current_market_price ? parseFloat(form.current_market_price) : 0
-  const isHighValue = currentMarketPriceNum >= 200
-
   // Filter products for dropdown
   const filteredProducts = products.filter(p => {
     if (productFilters.brand && p.brand !== productFilters.brand) return false
     if (productFilters.type && p.type !== productFilters.type) return false
     if (productFilters.language && p.language !== productFilters.language) return false
-    if (isSlab && form.grading_company && p.category !== form.grading_company) return false
     return true
   })
-
-  // Auto-select product for slabs based on grading company and price
-  const autoSelectSlabProduct = () => {
-    if (!isSlab || !form.grading_company || !form.current_market_price) return null
-    
-    const priceBucket = getPriceBucket(parseFloat(form.current_market_price))
-    const matchingProduct = filteredProducts.find(p => 
-      p.name.includes(priceBucket)
-    )
-    return matchingProduct
-  }
 
   // Bulk handlers
   const addBulkItem = () => {
@@ -157,33 +109,7 @@ export default function ManualInventory() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    let productId = form.product_id
-    
-    // For slabs, auto-select product based on grading company and price
-    if (isSlab) {
-      if (!form.grading_company) {
-        addToast('Please select a grading company', 'error')
-        return
-      }
-      if (!form.current_market_price) {
-        addToast('Please enter the current market price', 'error')
-        return
-      }
-      if (!form.card_name.trim()) {
-        addToast('Please enter the card name', 'error')
-        return
-      }
-      
-      const autoProduct = autoSelectSlabProduct()
-      if (autoProduct) {
-        productId = autoProduct.id
-      } else if (!form.product_id) {
-        addToast('Please select a product or check that matching slab products exist', 'error')
-        return
-      }
-    }
-    
-    if (!productId || !form.location_id) {
+    if (!form.product_id || !form.location_id) {
       addToast('Please select product and location', 'error')
       return
     }
@@ -199,46 +125,19 @@ export default function ManualInventory() {
       const avgCostBasis = form.avg_cost_basis !== '' ? parseFloat(form.avg_cost_basis) : null
       
       await updateInventory(
-        productId,
+        form.product_id,
         form.location_id,
         parseInt(form.quantity),
         avgCostBasis
       )
 
-      // If it's a high value slab ($200+), also add to high_value_items
-      if (isSlab && isHighValue) {
-        const selectedProduct = products.find(p => p.id === productId)
-        await supabase.from('high_value_items').insert({
-          card_name: form.card_name.trim(),
-          brand: selectedProduct?.brand || productFilters.brand,
-          item_type: 'Slab',
-          grading_company: form.grading_company,
-          grade: form.grade,
-          purchase_price: avgCostBasis,
-          purchase_price_usd: avgCostBasis,
-          currency: 'USD',
-          current_market_price: parseFloat(form.current_market_price),
-          location_id: form.location_id,
-          status: 'In Inventory',
-          date_added: new Date().toISOString().split('T')[0],
-          source: 'manual_inventory'
-        })
-      }
-
-      const successMsg = isSlab && form.card_name 
-        ? `Added: ${form.card_name} ${form.grading_company} ${form.grade}${isHighValue ? ' ⭐' : ''}`
-        : 'Inventory added successfully!'
-      addToast(successMsg)
+      addToast('Inventory added successfully!')
       
       setForm(f => ({
         ...f,
         product_id: '',
         quantity: '',
-        avg_cost_basis: '',
-        grading_company: '',
-        grade: '',
-        current_market_price: '',
-        card_name: ''
+        avg_cost_basis: ''
       }))
     } catch (error) {
       console.error('Error adding inventory:', error)
@@ -295,14 +194,14 @@ export default function ManualInventory() {
   const formatProductOption = (product) => (
     <div>
       <span className="text-vault-gold">{product.brand}</span>
-      <span className="text-gray-400"> - {product.type} - </span>
+      <span className="text-gray-400"> | </span>
       <span className="text-white">{product.name}</span>
       <span className="text-gray-500"> ({product.language})</span>
     </div>
   )
 
   const getProductLabel = (product) => 
-    `${product.brand} - ${product.type} - ${product.name} (${product.language})`
+    `${product.brand} | ${product.name} (${product.language})`
 
   if (loading) {
     return (
@@ -390,8 +289,6 @@ export default function ManualInventory() {
                   <option value="">All Types</option>
                   <option value="Sealed">Sealed</option>
                   <option value="Pack">Pack</option>
-                  <option value="Single">Single</option>
-                  <option value="Slab">Slab</option>
                 </select>
               </div>
               <div>
@@ -405,94 +302,19 @@ export default function ManualInventory() {
               </div>
             </div>
 
-            {/* SLAB-SPECIFIC FIELDS */}
-            {isSlab && (
-              <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg mb-4">
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Card Name *</label>
-                  <input
-                    type="text"
-                    name="card_name"
-                    value={form.card_name}
-                    onChange={handleChange}
-                    placeholder="e.g., Charizard VMAX Alt Art"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Grading Company *</label>
-                    <select name="grading_company" value={form.grading_company} onChange={handleChange}>
-                      <option value="">Select...</option>
-                      <option value="PSA">PSA</option>
-                      <option value="CGC">CGC</option>
-                      <option value="Beckett">Beckett</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Grade</label>
-                    <select name="grade" value={form.grade} onChange={handleChange}>
-                      <option value="">Select...</option>
-                      {GRADE_OPTIONS.map(g => (
-                        <option key={g.value} value={g.value}>{g.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Current Market Price (USD) *
-                    {isHighValue && (
-                      <span className="ml-2 text-yellow-400 inline-flex items-center gap-1">
-                        <Star size={14} /> High Value
-                      </span>
-                    )}
-                  </label>
-                  <input
-                    type="number"
-                    name="current_market_price"
-                    value={form.current_market_price}
-                    onChange={handleChange}
-                    min="0"
-                    step="0.01"
-                    placeholder="Enter current market price"
-                  />
-                  {form.current_market_price && (
-                    <p className="text-gray-500 text-xs mt-1">
-                      Auto-sorted into: <span className="text-purple-400 font-medium">{getPriceBucket(parseFloat(form.current_market_price))}</span> bucket
-                    </p>
-                  )}
-                </div>
-
-                {form.card_name && form.grading_company && (
-                  <div className="mt-4 p-3 bg-vault-dark rounded-lg border border-vault-border">
-                    <p className="text-gray-400 text-xs mb-1">Preview:</p>
-                    <p className="text-white font-medium flex items-center gap-2">
-                      {isHighValue && <Star size={14} className="text-yellow-400" />}
-                      {form.card_name} <span className="text-purple-400">{form.grading_company} {form.grade}</span>
-                      {form.current_market_price && <span className="text-vault-gold">${parseFloat(form.current_market_price).toLocaleString()}</span>}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Product Search - only for non-slabs */}
-            {!isSlab && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Product *</label>
-                <SearchableSelect
-                  options={filteredProducts}
-                  value={form.product_id}
-                  onChange={(val) => setForm(f => ({ ...f, product_id: val }))}
-                  placeholder="Type to search products..."
-                  getOptionValue={(p) => p.id}
-                  getOptionLabel={getProductLabel}
-                  renderOption={formatProductOption}
-                />
-              </div>
-            )}
+            {/* Product Search */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Product *</label>
+              <SearchableSelect
+                options={filteredProducts}
+                value={form.product_id}
+                onChange={(val) => setForm(f => ({ ...f, product_id: val }))}
+                placeholder="Type to search products..."
+                getOptionValue={(p) => p.id}
+                getOptionLabel={getProductLabel}
+                renderOption={formatProductOption}
+              />
+            </div>
           </div>
 
           {/* Quantity and Cost */}
@@ -526,19 +348,6 @@ export default function ManualInventory() {
             </div>
           </div>
 
-          {/* High Value Notice */}
-          {isSlab && isHighValue && (
-            <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg flex items-start gap-2">
-              <Star className="text-yellow-400 flex-shrink-0 mt-0.5" size={16} />
-              <div>
-                <p className="text-yellow-400 text-sm font-medium">High Value Item</p>
-                <p className="text-yellow-400/70 text-xs">
-                  This item will also be tracked in High Value Tracking for detailed P/L monitoring.
-                </p>
-              </div>
-            </div>
-          )}
-
           <div className="mt-6">
             <button type="submit" className="btn btn-primary w-full" disabled={submitting}>
               {submitting ? (
@@ -547,7 +356,6 @@ export default function ManualInventory() {
                 <>
                   <Save size={20} />
                   Add Inventory
-                  {isSlab && isHighValue && <Star size={16} className="ml-1" />}
                 </>
               )}
             </button>
