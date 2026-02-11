@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 
 import { createProduct } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { Plus, Save, Trash2, Copy } from 'lucide-react'
+import { Plus, Save, Trash2 } from 'lucide-react'
 
 export default function AddProduct() {
   
@@ -14,18 +14,16 @@ export default function AddProduct() {
   // Single product form
   const [form, setForm] = useState({
     brand: 'Pokemon',
-    type: 'Sealed',
     category: 'Booster Box',
     name: '',
     language: 'EN',
     breakable: true,
-    packs_per_box: '',
-    appendCategory: true
+    packs_per_box: ''
   })
 
   // Bulk products list
   const [bulkProducts, setBulkProducts] = useState([
-    { id: 1, brand: 'Pokemon', type: 'Sealed', category: 'Booster Box', name: '', language: 'EN', breakable: true, packs_per_box: '', appendCategory: true }
+    { id: 1, brand: 'Pokemon', category: 'Booster Box', name: '', language: 'EN', breakable: true, packs_per_box: '' }
   ])
 
   const handleChange = (e) => {
@@ -36,15 +34,28 @@ export default function AddProduct() {
     }))
   }
 
-  // Generate final product name
-  const getFinalName = (product) => {
-    if (!product.name.trim()) return '[Name]'
-    
-    if (product.type === 'Sealed' && product.appendCategory && product.category) {
-      return `${product.name.trim()} ${product.category}`
-    }
-    return product.name.trim()
-  }
+  // Product type/category options (SEALED ONLY)
+  const categoryOptions = [
+    'Booster Box',
+    'ETB',
+    'Booster Bundle',
+    'UPC',
+    'Tin',
+    'Tin Box',
+    'Blister Pack',
+    'Build & Battle',
+    'Collector Chest',
+    'Premium Collection',
+    'Ultra-Premium Collection',
+    'Collection Box',
+    'Figure Collection',
+    'Starter Deck',
+    'Deck',
+    'Packs Set',
+    'Special Box',
+    'Booster Pack',
+    'Other'
+  ]
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -57,11 +68,12 @@ export default function AddProduct() {
     setSubmitting(true)
 
     try {
-      const finalName = getFinalName(form)
+      // Build final name: "Launch Name + Product Type"
+      const finalName = `${form.name.trim()} ${form.category}`
       
       await createProduct({
         brand: form.brand,
-        type: form.type,
+        type: 'Sealed', // Always sealed
         category: form.category,
         name: finalName,
         language: form.language,
@@ -95,13 +107,11 @@ export default function AddProduct() {
     setBulkProducts([...bulkProducts, {
       id: newId,
       brand: lastProduct?.brand || 'Pokemon',
-      type: lastProduct?.type || 'Sealed',
       category: lastProduct?.category || 'Booster Box',
       name: '',
       language: lastProduct?.language || 'EN',
       breakable: lastProduct?.breakable ?? true,
-      packs_per_box: lastProduct?.packs_per_box || '',
-      appendCategory: lastProduct?.appendCategory ?? true
+      packs_per_box: lastProduct?.packs_per_box || ''
     }])
   }
 
@@ -116,17 +126,7 @@ export default function AddProduct() {
   const updateBulkProduct = (id, field, value) => {
     setBulkProducts(bulkProducts.map(p => {
       if (p.id !== id) return p
-      
-      const updated = { ...p, [field]: value }
-      
-      // Auto-update category and breakable when type changes
-      if (field === 'type') {
-        updated.category = categoryOptions[value]?.[0] || ''
-        updated.breakable = value === 'Sealed'
-        updated.appendCategory = value === 'Sealed'
-      }
-      
-      return updated
+      return { ...p, [field]: value }
     }))
   }
 
@@ -146,11 +146,11 @@ export default function AddProduct() {
     try {
       for (const product of validProducts) {
         try {
-          const finalName = getFinalName(product)
+          const finalName = `${product.name.trim()} ${product.category}`
           
           await createProduct({
             brand: product.brand,
-            type: product.type,
+            type: 'Sealed',
             category: product.category,
             name: finalName,
             language: product.language,
@@ -165,8 +165,7 @@ export default function AddProduct() {
       }
 
       if (successCount > 0) {
-        addToast(`${successCount} product(s) added successfully!${failCount > 0 ? ` ${failCount} failed.` : ''}`)
-        // Clear names but keep settings
+        addToast(`${successCount} product(s) added!${failCount > 0 ? ` ${failCount} failed.` : ''}`)
         setBulkProducts(bulkProducts.map(p => ({ ...p, name: '', packs_per_box: '' })))
       } else {
         addToast('Failed to add products', 'error')
@@ -174,13 +173,6 @@ export default function AddProduct() {
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const categoryOptions = {
-    Sealed: ['Booster Box', 'ETB', 'Booster Bundle', 'UPC', 'Tin', 'Tin Box', 'Blister Pack', 'Build & Battle', 'Collector Chest', 'Premium Collection', 'Ultra-Premium Collection', 'Collection Box', 'Figure Collection', 'Starter Deck', 'Deck', 'Packs Set', 'Special', 'Special Box', 'Collection', 'Other'],
-    Pack: ['Booster Pack'],
-    Single: ['Singles'],
-    Slab: ['PSA', 'CGC', 'Beckett']
   }
 
   return (
@@ -192,7 +184,7 @@ export default function AddProduct() {
           <Plus className="text-emerald-400" />
           Add New Product
         </h1>
-        <p className="text-gray-400 mt-1">Add new products to the inventory system</p>
+        <p className="text-gray-400 mt-1">Add sealed products to the inventory system</p>
       </div>
 
       {/* Mode Toggle */}
@@ -235,33 +227,9 @@ export default function AddProduct() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Type *</label>
-              <select
-                name="type"
-                value={form.type}
-                onChange={(e) => {
-                  const newType = e.target.value
-                  setForm(f => ({ 
-                    ...f, 
-                    type: newType,
-                    category: categoryOptions[newType]?.[0] || '',
-                    breakable: newType === 'Sealed',
-                    appendCategory: newType === 'Sealed'
-                  }))
-                }}
-                required
-              >
-                <option value="Sealed">Sealed</option>
-                <option value="Pack">Pack</option>
-                <option value="Single">Single</option>
-                <option value="Slab">Slab</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Category *</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Product Type *</label>
               <select name="category" value={form.category} onChange={handleChange} required>
-                {categoryOptions[form.type]?.map(cat => (
+                {categoryOptions.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
@@ -270,14 +238,14 @@ export default function AddProduct() {
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Language *</label>
               <select name="language" value={form.language} onChange={handleChange} required>
-                <option value="EN">English</option>
-                <option value="JP">Japanese</option>
-                <option value="CN">Chinese</option>
+                <option value="EN">English (ENG)</option>
+                <option value="JP">Japanese (JP)</option>
+                <option value="CN">Chinese (CN)</option>
               </select>
             </div>
 
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-300 mb-2">Set/Product Name *</label>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Launch Name *</label>
               <input
                 type="text"
                 name="name"
@@ -286,60 +254,37 @@ export default function AddProduct() {
                 placeholder="e.g., Prismatic Evolutions"
                 required
               />
-              <p className="text-gray-500 text-xs mt-1">Enter the set name (e.g., "Journey Together", "Mega Dream")</p>
             </div>
 
-            {form.type === 'Sealed' && (
-              <div className="md:col-span-2">
-                <div className="flex items-center gap-3 p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
-                  <input
-                    type="checkbox"
-                    id="appendCategory"
-                    name="appendCategory"
-                    checked={form.appendCategory}
-                    onChange={handleChange}
-                    className="w-5 h-5"
-                  />
-                  <label htmlFor="appendCategory" className="text-sm text-gray-300">
-                    Auto-append product type to name (e.g., "Journey Together" → "Journey Together ETB")
-                  </label>
-                </div>
+            <div className="md:col-span-2">
+              <div className="flex items-center gap-3 p-3 bg-vault-dark rounded-lg border border-vault-border">
+                <input
+                  type="checkbox"
+                  id="breakable"
+                  name="breakable"
+                  checked={form.breakable}
+                  onChange={handleChange}
+                  className="w-5 h-5"
+                />
+                <label htmlFor="breakable" className="text-sm text-gray-300">
+                  Can be broken into packs (Breakable)
+                </label>
               </div>
-            )}
+            </div>
 
-            {form.type === 'Sealed' && (
-              <>
-                <div className="md:col-span-2">
-                  <div className="flex items-center gap-3 p-3 bg-vault-dark rounded-lg border border-vault-border">
-                    <input
-                      type="checkbox"
-                      id="breakable"
-                      name="breakable"
-                      checked={form.breakable}
-                      onChange={handleChange}
-                      className="w-5 h-5"
-                    />
-                    <label htmlFor="breakable" className="text-sm text-gray-300">
-                      Can be broken into packs
-                    </label>
-                  </div>
-                </div>
-
-                {form.breakable && (
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Packs per Box *</label>
-                    <input
-                      type="number"
-                      name="packs_per_box"
-                      value={form.packs_per_box}
-                      onChange={handleChange}
-                      min="1"
-                      placeholder="e.g., 36"
-                      required={form.breakable}
-                    />
-                  </div>
-                )}
-              </>
+            {form.breakable && (
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2"># of Packs *</label>
+                <input
+                  type="number"
+                  name="packs_per_box"
+                  value={form.packs_per_box}
+                  onChange={handleChange}
+                  min="1"
+                  placeholder="e.g., 36"
+                  required={form.breakable}
+                />
+              </div>
             )}
           </div>
 
@@ -347,9 +292,13 @@ export default function AddProduct() {
           <div className="mt-6 p-4 bg-vault-dark rounded-lg border border-vault-border">
             <p className="text-gray-400 text-sm mb-2">Preview:</p>
             <p className="text-white font-medium">
-              {form.brand} - {form.type} - <span className="text-vault-gold">{getFinalName(form)}</span> - {form.category} ({form.language})
+              <span className="text-vault-gold">{form.brand}</span>
+              <span className="text-gray-400"> | </span>
+              <span className="text-white">{form.name || '[Launch Name]'} {form.category}</span>
+              <span className="text-gray-400"> | </span>
+              <span className="text-blue-400">{form.language}</span>
               {form.breakable && form.packs_per_box && (
-                <span className="text-blue-400 ml-2">• {form.packs_per_box} packs</span>
+                <span className="text-green-400 ml-2">• {form.packs_per_box} packs</span>
               )}
             </p>
           </div>
@@ -359,7 +308,7 @@ export default function AddProduct() {
               {submitting ? (
                 <div className="spinner w-5 h-5 border-2"></div>
               ) : (
-                <><Save size={20} /> Add New Product</>
+                <><Save size={20} /> Add Product</>
               )}
             </button>
           </div>
@@ -391,7 +340,7 @@ export default function AddProduct() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-400 mb-1">Brand</label>
                       <select
@@ -405,26 +354,13 @@ export default function AddProduct() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1">Type</label>
-                      <select
-                        value={product.type}
-                        onChange={(e) => updateBulkProduct(product.id, 'type', e.target.value)}
-                        className="w-full text-sm"
-                      >
-                        <option value="Sealed">Sealed</option>
-                        <option value="Pack">Pack</option>
-                        <option value="Single">Single</option>
-                        <option value="Slab">Slab</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1">Category</label>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Product Type</label>
                       <select
                         value={product.category}
                         onChange={(e) => updateBulkProduct(product.id, 'category', e.target.value)}
                         className="w-full text-sm"
                       >
-                        {categoryOptions[product.type]?.map(cat => (
+                        {categoryOptions.map(cat => (
                           <option key={cat} value={cat}>{cat}</option>
                         ))}
                       </select>
@@ -436,13 +372,13 @@ export default function AddProduct() {
                         onChange={(e) => updateBulkProduct(product.id, 'language', e.target.value)}
                         className="w-full text-sm"
                       >
-                        <option value="EN">English</option>
-                        <option value="JP">Japanese</option>
-                        <option value="CN">Chinese</option>
+                        <option value="EN">ENG</option>
+                        <option value="JP">JP</option>
+                        <option value="CN">CN</option>
                       </select>
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-medium text-gray-400 mb-1">Set Name *</label>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Launch Name *</label>
                       <input
                         type="text"
                         value={product.name}
@@ -453,48 +389,37 @@ export default function AddProduct() {
                     </div>
                   </div>
 
-                  {product.type === 'Sealed' && (
-                    <div className="mt-3 flex items-center gap-4">
-                      <label className="flex items-center gap-2 text-sm text-gray-400">
+                  <div className="mt-3 flex items-center gap-4">
+                    <label className="flex items-center gap-2 text-sm text-gray-400">
+                      <input
+                        type="checkbox"
+                        checked={product.breakable}
+                        onChange={(e) => updateBulkProduct(product.id, 'breakable', e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                      Breakable
+                    </label>
+                    {product.breakable && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400"># Packs:</span>
                         <input
-                          type="checkbox"
-                          checked={product.appendCategory}
-                          onChange={(e) => updateBulkProduct(product.id, 'appendCategory', e.target.checked)}
-                          className="w-4 h-4"
+                          type="number"
+                          value={product.packs_per_box}
+                          onChange={(e) => updateBulkProduct(product.id, 'packs_per_box', e.target.value)}
+                          className="w-16 text-sm"
+                          min="1"
+                          placeholder="36"
                         />
-                        Append category
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-gray-400">
-                        <input
-                          type="checkbox"
-                          checked={product.breakable}
-                          onChange={(e) => updateBulkProduct(product.id, 'breakable', e.target.checked)}
-                          className="w-4 h-4"
-                        />
-                        Breakable
-                      </label>
-                      {product.breakable && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-400">Packs:</span>
-                          <input
-                            type="number"
-                            value={product.packs_per_box}
-                            onChange={(e) => updateBulkProduct(product.id, 'packs_per_box', e.target.value)}
-                            className="w-16 text-sm"
-                            min="1"
-                            placeholder="36"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Preview */}
                   {product.name && (
                     <div className="mt-3 text-sm text-gray-400">
-                      Preview: <span className="text-white">{product.brand} - {product.type} - </span>
-                      <span className="text-vault-gold">{getFinalName(product)}</span>
-                      <span className="text-white"> ({product.language})</span>
+                      Preview: <span className="text-vault-gold">{product.brand}</span>
+                      <span className="text-white"> | {product.name} {product.category}</span>
+                      <span className="text-blue-400"> | {product.language}</span>
                     </div>
                   )}
                 </div>
