@@ -7,22 +7,19 @@ import { Users, Plus, Edit2, Trash2, Save, X, UserPlus, Key, RefreshCw, Check } 
 // All available pages with labels
 const ALL_PAGES = [
   { path: '/', label: 'Dashboard' },
+  { path: '/inventory', label: 'View Inventory' },
+  { path: '/move-inventory', label: 'Move Inventory' },
+  { path: '/manual-inventory', label: 'Manual Inventory' },
   { path: '/stream-counts', label: 'Stream Counts' },
   { path: '/platform-sales', label: 'Platform Sales' },
   { path: '/add-product', label: 'Add Product' },
-  { path: '/manual-inventory', label: 'Manual Inventory' },
   { path: '/purchased-items', label: 'Purchased Items' },
-  { path: '/expenses', label: 'Business Expenses' },
   { path: '/intake', label: 'Intake to Master' },
-  { path: '/move-inventory', label: 'Move Inventory' },
   { path: '/break-box', label: 'Break Box' },
-  { path: '/inventory', label: 'View Inventory' },
-  { path: '/high-value', label: 'High Value' },
+  { path: '/expenses', label: 'Business Expenses' },
   { path: '/reports', label: 'Reports' },
-  { path: '/product-mapping', label: 'Product Mapping' },
   { path: '/users', label: 'Team Management' },
-  { path: '/storefront-sale', label: 'Storefront Sale' },
-  { path: '/grading', label: 'Send to Grading (Admin)' },
+  { path: '/high-value', label: 'High Value (Separate)' },
 ]
 
 export default function UserManagement() {
