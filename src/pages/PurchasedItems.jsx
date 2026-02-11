@@ -390,8 +390,6 @@ export default function PurchasedItems() {
                 <option value="">All Types</option>
                 <option value="Sealed">Sealed</option>
                 <option value="Pack">Pack</option>
-                <option value="Single">Single</option>
-                <option value="Slab">Slab</option>
               </select>
             </div>
             <div>
