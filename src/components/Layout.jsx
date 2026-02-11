@@ -36,12 +36,10 @@ const navItems = [
   { path: '/purchased-items', label: 'Purchased Items', icon: ShoppingCart },
   { path: '/intake', label: 'Intake to Master', icon: Package },
   { path: '/break-box', label: 'Break Box', icon: Box },
-  { path: '/high-value', label: 'High Value', icon: Star },
-  { path: '/product-mapping', label: 'Product Mapping', icon: Link2 },
   { path: '/expenses', label: 'Business Expenses', icon: Receipt },
-  { path: '/storefront-sale', label: 'Storefront Sale', icon: DollarSign },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
   { path: '/users', label: 'Team Management', icon: Users },
+  { path: '/high-value', label: 'High Value', icon: Star },
 ]
 
 export default function Layout({ children }) {
