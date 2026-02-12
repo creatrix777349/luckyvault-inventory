@@ -85,8 +85,13 @@ export default function Reports() {
       let streamCounts = []
       let streamCountItems = []
       try {
-        const startDateTime = `${start}T00:00:00`
-        const endDateTime = `${end}T23:59:59`
+        // Extend the range to handle timezone differences
+        // A count done at 11pm local on Feb 11 could be stored as Feb 12 UTC
+        // So we search from start-1 day to end+1 day, then filter by local date
+        const extendedStart = new Date(start)
+        extendedStart.setDate(extendedStart.getDate() - 1)
+        const extendedEnd = new Date(end)
+        extendedEnd.setDate(extendedEnd.getDate() + 1)
         
         const { data: countsData, error: countsError } = await supabase
           .from('stream_counts')
@@ -96,12 +101,17 @@ export default function Reports() {
             streamer:users!stream_counts_streamer_id_fkey(name),
             counted_by:users!stream_counts_counted_by_id_fkey(name)
           `)
-          .gte('count_time', startDateTime)
-          .lte('count_time', endDateTime)
+          .gte('count_time', extendedStart.toISOString())
+          .lte('count_time', extendedEnd.toISOString())
           .order('count_time', { ascending: false })
         
         if (countsData && !countsError) {
-          streamCounts = countsData
+          // Filter to only include counts where the LOCAL date matches
+          streamCounts = countsData.filter(c => {
+            const countDate = new Date(c.count_time)
+            const localDateStr = countDate.toLocaleDateString('en-CA') // YYYY-MM-DD format
+            return localDateStr >= start && localDateStr <= end
+          })
           
           // Fetch all items for these counts
           if (countsData.length > 0) {
