@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react'
-import { 
-  fetchProducts,
-  fetchLocations,
-  fetchInventory,
-  createBoxBreak,
-  createMovement,
-  updateInventory
-} from '../lib/supabase'
+import { fetchProducts, fetchLocations, fetchInventory, createBoxBreak, updateInventory } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
 import SearchableSelect from '../components/SearchableSelect'
 import { Box, ArrowDown, Save, AlertCircle, Package } from 'lucide-react'
+
+// Helper to extract Launch Name
+const extractLaunchName = (fullName, category) => {
+  if (!fullName) return ''
+  if (!category) return fullName
+  const categoryPattern = new RegExp(`\\s*${category}\\s*$`, 'i')
+  return fullName.replace(categoryPattern, '').trim() || fullName
+}
 
 export default function BreakBox() {
   const { toasts, addToast, removeToast } = useToast()
@@ -29,25 +30,20 @@ export default function BreakBox() {
     notes: ''
   })
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  useEffect(() => { loadData() }, [])
 
   const loadData = async () => {
     try {
       const [productsData, locData] = await Promise.all([
-        fetchProducts(), // Fetch all products to find packs too
+        fetchProducts(),
         fetchLocations('Physical')
       ])
       setProducts(productsData)
       
-      // Find and store Master Inventory location
       const master = locData.find(l => l.name === 'Master Inventory')
       if (master) {
         setMasterLocation(master)
-        // Load inventory for Master Inventory
         const invData = await fetchInventory(master.id)
-        // Filter to only breakable products with quantity > 0
         const breakableInv = invData.filter(inv => inv.product?.breakable && inv.quantity > 0)
         setInventory(breakableInv)
       } else {
@@ -63,10 +59,7 @@ export default function BreakBox() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
-    setForm(f => ({ 
-      ...f, 
-      [name]: type === 'checkbox' ? checked : value 
-    }))
+    setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
   }
 
   const selectedProduct = products.find(p => p.id === form.sealed_product_id)
@@ -74,54 +67,18 @@ export default function BreakBox() {
   const maxBoxes = selectedInventory?.quantity || 0
   
   const defaultPackCount = selectedProduct?.packs_per_box || 0
-  const actualPackCount = form.override_pack_count 
-    ? parseInt(form.manual_pack_count) || 0 
-    : defaultPackCount
+  const actualPackCount = form.override_pack_count ? parseInt(form.manual_pack_count) || 0 : defaultPackCount
   const totalPacks = actualPackCount * parseInt(form.boxes_broken || 0)
 
-  // Find corresponding pack product - improved matching logic
   const findPackProduct = () => {
     if (!selectedProduct) return null
-    
-    // Get all pack products with same brand and language
-    const packProducts = products.filter(p => 
+    const launchName = extractLaunchName(selectedProduct.name, selectedProduct.category)
+    return products.find(p => 
       p.brand === selectedProduct.brand &&
+      p.language === selectedProduct.language &&
       p.type === 'Pack' &&
-      p.language === selectedProduct.language
+      p.name.includes(launchName)
     )
-    
-    // Try exact name match first (for products like "Mega Brave" box -> "Mega Brave" pack)
-    let match = packProducts.find(p => 
-      p.name.toLowerCase() === selectedProduct.name.toLowerCase()
-    )
-    if (match) return match
-    
-    // Try matching without common suffixes (e.g., "Mega Evolution Inferno X" -> "Mega Evolution Inferno X")
-    match = packProducts.find(p => 
-      selectedProduct.name.toLowerCase().startsWith(p.name.toLowerCase()) ||
-      p.name.toLowerCase().startsWith(selectedProduct.name.toLowerCase())
-    )
-    if (match) return match
-    
-    // Try matching the core name (remove parenthetical info)
-    const coreName = selectedProduct.name.replace(/\s*\([^)]*\)\s*/g, '').trim().toLowerCase()
-    match = packProducts.find(p => {
-      const packCoreName = p.name.replace(/\s*\([^)]*\)\s*/g, '').trim().toLowerCase()
-      return coreName === packCoreName || 
-             coreName.startsWith(packCoreName) || 
-             packCoreName.startsWith(coreName)
-    })
-    if (match) return match
-    
-    // Fallback: match by first significant word (skip common prefixes)
-    const significantWord = selectedProduct.name.split(' ')[0].toLowerCase()
-    if (significantWord.length > 2) {
-      match = packProducts.find(p => 
-        p.name.toLowerCase().includes(significantWord)
-      )
-    }
-    
-    return match
   }
 
   const packProduct = findPackProduct()
@@ -129,16 +86,11 @@ export default function BreakBox() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (!masterLocation) {
-      addToast('Master Inventory location not found', 'error')
-      return
-    }
-    
-    if (!form.sealed_product_id) {
+    if (!form.sealed_product_id || !masterLocation) {
       addToast('Please select a product', 'error')
       return
     }
-    
+
     if (parseInt(form.boxes_broken) > maxBoxes) {
       addToast(`Only ${maxBoxes} boxes available`, 'error')
       return
@@ -150,7 +102,7 @@ export default function BreakBox() {
     }
 
     if (!packProduct) {
-      addToast('No matching pack product found. Please add the pack product first.', 'error')
+      addToast('No matching pack product found. Please create a pack product first.', 'error')
       return
     }
 
@@ -158,52 +110,30 @@ export default function BreakBox() {
 
     try {
       const boxesBroken = parseInt(form.boxes_broken)
-      const costBasisPerBox = selectedInventory?.avg_cost_basis || 0
-      const costBasisPerPack = totalPacks > 0 ? (costBasisPerBox * boxesBroken) / totalPacks : 0
-
-      // Create box break record
+      
       await createBoxBreak({
         date: form.date,
         sealed_product_id: form.sealed_product_id,
         pack_product_id: packProduct.id,
-        location_id: masterLocation.id,
         boxes_broken: boxesBroken,
         packs_created: totalPacks,
-        cost_basis_per_pack: costBasisPerPack,
-        override_pack_count: form.override_pack_count,
-        notes: form.notes,
-        created_by: profile?.id
+        location_id: masterLocation.id,
+        notes: form.notes
       })
 
-      // Update inventory - subtract boxes from Master Inventory
-      await updateInventory(
-        form.sealed_product_id,
-        masterLocation.id,
-        -boxesBroken
-      )
+      await updateInventory(form.sealed_product_id, masterLocation.id, -boxesBroken)
 
-      // Update inventory - add packs to Master Inventory
-      await updateInventory(
-        packProduct.id,
-        masterLocation.id,
-        totalPacks,
-        costBasisPerPack
-      )
+      const costPerPack = selectedInventory?.avg_cost_basis ? selectedInventory.avg_cost_basis / actualPackCount : null
+      await updateInventory(packProduct.id, masterLocation.id, totalPacks, costPerPack)
 
-      addToast(`Broke ${boxesBroken} box(es) into ${totalPacks} packs!`)
+      const launchName = extractLaunchName(selectedProduct.name, selectedProduct.category)
+      addToast(`Broke ${boxesBroken} ${launchName} box(es) into ${totalPacks} packs!`)
       
-      // Reset form
-      setForm(f => ({
-        ...f,
-        sealed_product_id: '',
-        boxes_broken: 1,
-        override_pack_count: false,
-        manual_pack_count: '',
-        notes: ''
-      }))
+      setForm(f => ({ ...f, sealed_product_id: '', boxes_broken: 1, override_pack_count: false, manual_pack_count: '', notes: '' }))
       
-      // Reload inventory
-      loadData()
+      const invData = await fetchInventory(masterLocation.id)
+      const breakableInv = invData.filter(inv => inv.product?.breakable && inv.quantity > 0)
+      setInventory(breakableInv)
     } catch (error) {
       console.error('Error breaking box:', error)
       addToast('Failed to break box', 'error')
@@ -212,57 +142,56 @@ export default function BreakBox() {
     }
   }
 
-  if (loading) {
+  const formatProductOption = (inv) => {
+    const launchName = extractLaunchName(inv.product?.name, inv.product?.category)
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="spinner"></div>
+      <div className="flex items-center gap-2">
+        <span className="text-vault-gold">{inv.product?.brand}</span>
+        <span className="text-gray-400">|</span>
+        <span className="text-white">{launchName}</span>
+        <span className="text-gray-400">|</span>
+        <span className="text-gray-300">{inv.product?.category}</span>
+        <span className="text-gray-400">|</span>
+        <span className="text-blue-400">{inv.product?.language}</span>
+        <span className="text-green-400 ml-2">• {inv.quantity} avail</span>
+        <span className="text-purple-400">• {inv.product?.packs_per_box} packs</span>
+        {inv.avg_cost_basis > 0 && (
+          <span className="text-yellow-400">• ${inv.avg_cost_basis.toFixed(2)}/box</span>
+        )}
       </div>
     )
+  }
+
+  const getProductLabel = (inv) => {
+    const launchName = extractLaunchName(inv.product?.name, inv.product?.category)
+    return `${inv.product?.brand} | ${launchName} | ${inv.product?.category} | ${inv.product?.language} - ${inv.quantity} avail`
+  }
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64"><div className="spinner"></div></div>
   }
 
   return (
     <div className="fade-in">
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       
-      {/* Header */}
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold text-white flex items-center gap-3">
-          <Box className="text-pink-400" />
+          <Box className="text-amber-400" />
           Break Box
         </h1>
-        <p className="text-gray-400 mt-1">Break sealed product into individual packs at Master Inventory</p>
+        <p className="text-gray-400 mt-1">Break sealed products into packs</p>
       </div>
 
       <form onSubmit={handleSubmit} className="card max-w-2xl">
-        {/* Location Info (read-only) */}
-        <div className="mb-6 p-3 bg-vault-dark rounded-lg border border-vault-border flex items-center gap-3">
-          <Package className="text-cyan-400" size={20} />
-          <div>
-            <p className="text-sm text-gray-400">Location</p>
-            <p className="text-white font-medium">Master Inventory</p>
-          </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-300 mb-2">Date *</label>
+          <input type="date" name="date" value={form.date} onChange={handleChange} required />
         </div>
 
-        {/* Date */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Date *
-          </label>
-          <input
-            type="date"
-            name="date"
-            value={form.date}
-            onChange={handleChange}
-            required
-            className="max-w-xs"
-          />
-        </div>
-
-        {/* Product Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Sealed Product * (breakable items in Master Inventory)
-          </label>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-300 mb-2">Sealed Product * (breakable in Master)</label>
+          <p className="text-xs text-gray-500 mb-2">Format: Brand | Launch Name | Product Type | Language</p>
           
           {inventory.length === 0 ? (
             <div className="p-4 bg-vault-dark rounded-lg border border-vault-border text-gray-400 text-sm">
@@ -273,43 +202,21 @@ export default function BreakBox() {
               options={inventory}
               value={form.sealed_product_id}
               onChange={(val) => setForm(f => ({ ...f, sealed_product_id: val, boxes_broken: 1 }))}
-              placeholder="Type to search products..."
+              placeholder="Search breakable products..."
               getOptionValue={(inv) => inv.product_id}
-              getOptionLabel={(inv) => `${inv.product?.brand} - ${inv.product?.name} - ${inv.quantity} avail - ${inv.product?.packs_per_box} packs/box`}
-              renderOption={(inv) => (
-                <div>
-                  <span className="text-vault-gold">{inv.product?.brand}</span>
-                  <span className="text-gray-400"> - </span>
-                  <span className="text-white">{inv.product?.name}</span>
-                  <span className="text-gray-500"> ({inv.product?.language})</span>
-                  <span className="text-green-400 ml-2">• {inv.quantity} avail</span>
-                  <span className="text-blue-400 ml-2">• {inv.product?.packs_per_box} packs/box</span>
-                </div>
-              )}
+              getOptionLabel={getProductLabel}
+              renderOption={formatProductOption}
             />
           )}
         </div>
 
-        {/* Box Count */}
         {form.sealed_product_id && (
           <>
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Boxes to Break * (max: {maxBoxes})
-              </label>
-              <input
-                type="number"
-                name="boxes_broken"
-                value={form.boxes_broken}
-                onChange={handleChange}
-                min="1"
-                max={maxBoxes}
-                required
-                className="max-w-xs"
-              />
+              <label className="block text-sm font-medium text-gray-300 mb-2">Boxes to Break * (max: {maxBoxes})</label>
+              <input type="number" name="boxes_broken" value={form.boxes_broken} onChange={handleChange} min="1" max={maxBoxes} required />
             </div>
 
-            {/* Pack Override */}
             <div className="mt-4 p-4 bg-vault-dark rounded-lg border border-vault-border">
               <div className="flex items-center gap-3 mb-3">
                 <input
@@ -321,106 +228,84 @@ export default function BreakBox() {
                   className="w-5 h-5"
                 />
                 <label htmlFor="override_pack_count" className="text-sm text-gray-300">
-                  Override pack count (for unsealed or partial boxes)
+                  Override pack count (default: {defaultPackCount} packs/box)
                 </label>
               </div>
-
+              
               {form.override_pack_count && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Actual packs per box
-                  </label>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Manual Pack Count *</label>
                   <input
                     type="number"
                     name="manual_pack_count"
                     value={form.manual_pack_count}
                     onChange={handleChange}
                     min="1"
-                    placeholder={defaultPackCount.toString()}
-                    className="max-w-xs"
+                    placeholder="Enter packs per box"
+                    required={form.override_pack_count}
                   />
                 </div>
               )}
             </div>
 
-            {/* Preview */}
-            <div className="mt-6 p-4 bg-gradient-to-br from-pink-500/10 to-purple-500/10 rounded-lg border border-pink-500/30">
-              <h4 className="font-display font-semibold text-white mb-3 flex items-center gap-2">
-                <ArrowDown size={18} />
-                Break Preview
+            <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <h4 className="text-blue-400 font-medium mb-2 flex items-center gap-2">
+                <Package size={16} /> Break Summary
               </h4>
-              
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Boxes to break:</span>
-                  <span className="text-white font-medium">{form.boxes_broken}</span>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-400">Breaking:</span>
+                  <span className="text-white ml-2">{form.boxes_broken} box(es)</span>
                 </div>
-                <div className="flex justify-between">
+                <div>
                   <span className="text-gray-400">Packs per box:</span>
-                  <span className="text-white font-medium">
-                    {actualPackCount}
-                    {form.override_pack_count && (
-                      <span className="text-yellow-400 ml-1">(override)</span>
-                    )}
+                  <span className="text-white ml-2">{actualPackCount}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">Total packs created:</span>
+                  <span className="text-vault-gold font-semibold ml-2">{totalPacks}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">Box cost:</span>
+                  <span className="text-white ml-2">
+                    ${selectedInventory?.avg_cost_basis?.toFixed(2) || '0.00'} each
                   </span>
                 </div>
-                <div className="flex justify-between border-t border-vault-border pt-2 mt-2">
-                  <span className="text-gray-300 font-medium">Total packs created:</span>
-                  <span className="text-pink-400 font-bold text-lg">{totalPacks}</span>
-                </div>
-                {packProduct && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Pack product:</span>
-                    <span className="text-green-400 font-medium">{packProduct.name}</span>
-                  </div>
-                )}
-                {selectedInventory?.avg_cost_basis > 0 && totalPacks > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Cost basis per pack:</span>
-                    <span className="text-vault-gold">
-                      ${((selectedInventory.avg_cost_basis * parseInt(form.boxes_broken || 0)) / totalPacks).toFixed(2)}
+                {selectedInventory?.avg_cost_basis > 0 && actualPackCount > 0 && (
+                  <div className="col-span-2 pt-2 border-t border-blue-500/30">
+                    <span className="text-gray-400">Cost per pack:</span>
+                    <span className="text-green-400 font-semibold ml-2">
+                      ${(selectedInventory.avg_cost_basis / actualPackCount).toFixed(2)}
+                    </span>
+                    <span className="text-gray-500 ml-2">
+                      (${selectedInventory.avg_cost_basis.toFixed(2)} ÷ {actualPackCount} packs)
                     </span>
                   </div>
                 )}
               </div>
+              
+              {!packProduct && (
+                <div className="mt-3 p-2 bg-red-500/20 rounded flex items-center gap-2 text-red-400 text-sm">
+                  <AlertCircle size={16} />
+                  No matching pack product found. Create one first in Add Product.
+                </div>
+              )}
             </div>
 
-            {!packProduct && (
-              <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2 text-red-400 text-sm">
-                <AlertCircle size={18} />
-                No matching pack product found. Please add a pack product for "{selectedProduct?.name}" before breaking.
-              </div>
-            )}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Notes</label>
+              <input type="text" name="notes" value={form.notes} onChange={handleChange} placeholder="Optional" />
+            </div>
           </>
         )}
 
-        {/* Notes */}
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Notes
-          </label>
-          <textarea
-            name="notes"
-            value={form.notes}
-            onChange={handleChange}
-            rows={2}
-            placeholder="Optional notes..."
-          />
-        </div>
-
-        {/* Submit */}
         <div className="mt-6">
-          <button 
-            type="submit" 
-            className="btn btn-primary w-full"
-            disabled={submitting || !form.sealed_product_id || totalPacks === 0 || !packProduct}
-          >
-            {submitting ? (
-              <div className="spinner w-5 h-5 border-2"></div>
-            ) : (
+          <button type="submit" className="btn btn-primary w-full" disabled={submitting || !form.sealed_product_id || !packProduct}>
+            {submitting ? <div className="spinner w-5 h-5 border-2"></div> : (
               <>
-                <Save size={20} />
-                Break Box
+                <Box size={20} />
+                <ArrowDown size={16} className="mx-1" />
+                Break {form.boxes_broken} Box(es) into {totalPacks} Packs
               </>
             )}
           </button>
