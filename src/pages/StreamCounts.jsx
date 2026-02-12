@@ -25,6 +25,14 @@ import {
   History
 } from 'lucide-react'
 
+// Helper to extract Launch Name from full product name
+const extractLaunchName = (fullName, category) => {
+  if (!fullName) return ''
+  if (!category) return fullName
+  const categoryPattern = new RegExp(`\\s*${category}\\s*$`, 'i')
+  return fullName.replace(categoryPattern, '').trim() || fullName
+}
+
 // Stream room locations (filter for only these)
 const STREAM_ROOM_NAMES = [
   'Stream Room - eBay LuckyVaultUS',
@@ -609,9 +617,10 @@ export default function StreamCounts() {
                 <table>
                   <thead>
                     <tr>
-                      <th>Product</th>
+                      <th>Launch Name</th>
                       <th>Brand</th>
-                      <th>Type</th>
+                      <th>Product Type</th>
+                      <th>Lang</th>
                       <th className="text-right">Expected</th>
                       <th className="text-right w-32">Actual Count</th>
                       <th className="text-right">Diff</th>
@@ -622,16 +631,18 @@ export default function StreamCounts() {
                       const expected = inv.quantity
                       const actual = counts[inv.product_id] ?? expected
                       const diff = (actual === '' ? 0 : actual) - expected
+                      const launchName = extractLaunchName(inv.product?.name, inv.product?.category)
                       
                       return (
                         <tr key={inv.id} className={diff !== 0 ? 'bg-vault-gold/5' : ''}>
-                          <td className="font-medium text-white">{inv.product?.name}</td>
+                          <td className="font-medium text-white">{launchName}</td>
                           <td>
                             <span className={`badge ${inv.product?.brand === 'Pokemon' ? 'badge-warning' : 'badge-info'}`}>
                               {inv.product?.brand}
                             </span>
                           </td>
-                          <td className="text-gray-400">{inv.product?.type}</td>
+                          <td className="text-gray-400">{inv.product?.category}</td>
+                          <td className="text-gray-400">{inv.product?.language}</td>
                           <td className="text-right text-gray-400">{expected}</td>
                           <td className="text-right">
                             <input
