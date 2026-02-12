@@ -9,7 +9,7 @@ import {
   supabase
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { Star, Plus, Save, X, ArrowRightLeft, Camera, Upload, TrendingUp, TrendingDown, Edit2, Trash2 } from 'lucide-react'
+import { Star, Plus, Save, X, ArrowRightLeft, Camera, Upload, TrendingUp, TrendingDown, Edit2 } from 'lucide-react'
 
 // Grade options for dropdown
 const GRADE_OPTIONS = [
@@ -45,7 +45,6 @@ export default function HighValueTracking() {
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [showMoveModal, setShowMoveModal] = useState(null)
-  const [showEditModal, setShowEditModal] = useState(null)
 
   useEffect(() => {
     loadData()
@@ -137,26 +136,7 @@ export default function HighValueTracking() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {items.map(item => (
-            <HighValueCard 
-              key={item.id} 
-              item={item} 
-              onMove={() => setShowMoveModal(item)} 
-              onEdit={() => setShowEditModal(item)}
-              onDelete={async () => {
-                if (!confirm('Are you sure you want to delete this high value item?')) return
-                try {
-                  await supabase
-                    .from('high_value_items')
-                    .update({ deleted: true, deleted_at: new Date().toISOString() })
-                    .eq('id', item.id)
-                  addToast('Item deleted')
-                  loadData()
-                } catch (error) {
-                  addToast('Failed to delete item', 'error')
-                }
-              }}
-              onUpdate={loadData} 
-            />
+            <HighValueCard key={item.id} item={item} onMove={() => setShowMoveModal(item)} onUpdate={loadData} />
           ))}
         </div>
       )}
@@ -181,20 +161,11 @@ export default function HighValueTracking() {
           addToast={addToast}
         />
       )}
-
-      {showEditModal && (
-        <EditHighValueModal
-          item={showEditModal}
-          onClose={() => setShowEditModal(null)}
-          onSuccess={() => { setShowEditModal(null); loadData(); addToast('Item updated!'); }}
-          addToast={addToast}
-        />
-      )}
     </div>
   )
 }
 
-function HighValueCard({ item, onMove, onUpdate, onEdit, onDelete }) {
+function HighValueCard({ item, onMove, onUpdate }) {
   const [editingMarket, setEditingMarket] = useState(false)
   const [editingPaid, setEditingPaid] = useState(false)
   const [marketPrice, setMarketPrice] = useState(item.current_market_price || '')
@@ -235,29 +206,17 @@ function HighValueCard({ item, onMove, onUpdate, onEdit, onDelete }) {
 
   return (
     <div className="card border-yellow-500/30 bg-gradient-to-br from-yellow-500/5 to-amber-600/5">
-      {/* Square thumbnail with object-cover - clickable for edit */}
-      <div 
-        className="aspect-square bg-vault-dark rounded-lg mb-3 flex items-center justify-center overflow-hidden relative group cursor-pointer"
-        onClick={onEdit}
-      >
+      {/* Square thumbnail with object-contain */}
+      <div className="aspect-square bg-vault-dark rounded-lg mb-3 flex items-center justify-center overflow-hidden">
         {item.photo_url ? (
-          <img src={item.photo_url} alt={item.card_name} className="w-full h-full object-cover" />
+          <img src={item.photo_url} alt={item.card_name} className="w-full h-full object-contain" />
         ) : (
           <Camera className="text-gray-600" size={48} />
         )}
-        {/* Edit overlay */}
-        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <Edit2 className="text-white" size={24} />
-        </div>
       </div>
       
       <div>
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <h3 className="font-display text-base font-semibold text-white truncate flex-1">{item.card_name}</h3>
-          <button onClick={onEdit} className="text-gray-500 hover:text-white flex-shrink-0" title="Edit item">
-            <Edit2 size={14} />
-          </button>
-        </div>
+        <h3 className="font-display text-base font-semibold text-white mb-1 truncate">{item.card_name}</h3>
         
         <div className="flex items-center gap-2 mb-2">
           <span className={`badge text-xs ${item.brand === 'Pokemon' ? 'badge-warning' : item.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'}`}>{item.brand}</span>
@@ -346,17 +305,12 @@ function HighValueCard({ item, onMove, onUpdate, onEdit, onDelete }) {
           )}
         </div>
         
-        {/* Location & Action Buttons */}
+        {/* Location & Move Button */}
         <div className="flex justify-between items-center mt-3 pt-3 border-t border-vault-border">
-          <p className="text-gray-500 text-xs truncate max-w-[40%]">{item.location?.name}</p>
-          <div className="flex gap-1">
-            <button onClick={onMove} className="btn btn-secondary text-xs py-1 px-2">
-              <ArrowRightLeft size={12} /> Move
-            </button>
-            <button onClick={onDelete} className="btn btn-secondary text-xs py-1 px-2 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30">
-              <Trash2 size={12} />
-            </button>
-          </div>
+          <p className="text-gray-500 text-xs truncate max-w-[60%]">{item.location?.name}</p>
+          <button onClick={onMove} className="btn btn-secondary text-xs py-1 px-2">
+            <ArrowRightLeft size={12} /> Move
+          </button>
         </div>
       </div>
     </div>
@@ -561,188 +515,6 @@ function AddHighValueForm({ locations, vendors, users, onClose, onSuccess, addTo
               <button type="button" onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
               <button type="submit" className="btn btn-primary flex-1" disabled={submitting}>
                 {submitting ? <div className="spinner w-5 h-5 border-2"></div> : <><Save size={20} /> Add Item</>}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function EditHighValueModal({ item, onClose, onSuccess, addToast }) {
-  const [submitting, setSubmitting] = useState(false)
-  const [photoFile, setPhotoFile] = useState(null)
-  const [photoPreview, setPhotoPreview] = useState(item.photo_url || null)
-  const [form, setForm] = useState({
-    card_name: item.card_name || '',
-    brand: item.brand || 'Pokemon',
-    item_type: item.item_type || 'Slab $400+',
-    grading_company: item.grading_company || '',
-    grade: item.grade || '',
-    date_added: item.date_added || new Date().toISOString().split('T')[0]
-  })
-
-  const handleChange = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
-  
-  const handlePhotoChange = (e) => {
-    const file = e.target.files[0]
-    if (file) { 
-      setPhotoFile(file)
-      setPhotoPreview(URL.createObjectURL(file))
-    }
-  }
-
-  const isSlab = form.item_type.includes('Slab')
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setSubmitting(true)
-    try {
-      let photoUrl = item.photo_url
-      
-      // Upload new photo if selected
-      if (photoFile) {
-        const fileName = `${Date.now()}-${photoFile.name}`
-        const { error } = await supabase.storage.from('high-value-photos').upload(fileName, photoFile)
-        if (!error) {
-          const { data: urlData } = supabase.storage.from('high-value-photos').getPublicUrl(fileName)
-          photoUrl = urlData.publicUrl
-        }
-      }
-      
-      await supabase
-        .from('high_value_items')
-        .update({
-          card_name: form.card_name,
-          brand: form.brand,
-          item_type: form.item_type,
-          grading_company: form.grading_company || null,
-          grade: form.grade || null,
-          date_added: form.date_added,
-          photo_url: photoUrl
-        })
-        .eq('id', item.id)
-      
-      onSuccess()
-    } catch (error) {
-      console.error('Error updating item:', error)
-      addToast('Failed to update item', 'error')
-    } finally { 
-      setSubmitting(false) 
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-vault-surface border border-vault-border rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="font-display text-xl font-semibold text-white">Edit High Value Item</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={24} /></button>
-          </div>
-          
-          <form onSubmit={handleSubmit}>
-            {/* Photo */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-300 mb-2">Photo</label>
-              <div className="border-2 border-dashed border-vault-border rounded-lg p-4 text-center">
-                {photoPreview ? (
-                  <div className="relative">
-                    <img src={photoPreview} alt="Preview" className="max-h-40 mx-auto rounded" />
-                    <button 
-                      type="button" 
-                      onClick={() => { setPhotoFile(null); setPhotoPreview(null); }} 
-                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                ) : (
-                  <label className="cursor-pointer">
-                    <Upload className="mx-auto text-gray-500 mb-2" size={32} />
-                    <span className="text-gray-400 text-sm">Click to upload photo</span>
-                    <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-                  </label>
-                )}
-                {photoPreview && (
-                  <label className="cursor-pointer block mt-2">
-                    <span className="text-blue-400 text-sm hover:underline">Change photo</span>
-                    <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-                  </label>
-                )}
-              </div>
-            </div>
-            
-            {/* Card Name */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-300 mb-2">Card Name *</label>
-              <input 
-                type="text" 
-                name="card_name" 
-                value={form.card_name} 
-                onChange={handleChange} 
-                placeholder="e.g., Charizard VMAX Alt Art" 
-                required 
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              {/* Brand */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Brand *</label>
-                <select name="brand" value={form.brand} onChange={handleChange} required>
-                  <option value="Pokemon">Pokemon</option>
-                  <option value="One Piece">One Piece</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              
-              {/* Date Added */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Date Added *</label>
-                <input type="date" name="date_added" value={form.date_added} onChange={handleChange} required />
-              </div>
-              
-              {/* Type */}
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Type *</label>
-                <select name="item_type" value={form.item_type} onChange={handleChange} required>
-                  {ITEM_TYPES.map(type => (
-                    <option key={type.value} value={type.value}>{type.label}</option>
-                  ))}
-                </select>
-              </div>
-              
-              {/* Grading fields - show for Slab types */}
-              {isSlab && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Grading Company</label>
-                    <select name="grading_company" value={form.grading_company} onChange={handleChange}>
-                      <option value="">Select...</option>
-                      <option value="PSA">PSA</option>
-                      <option value="CGC">CGC</option>
-                      <option value="Beckett">Beckett</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Grade</label>
-                    <select name="grade" value={form.grade} onChange={handleChange}>
-                      <option value="">Select...</option>
-                      {GRADE_OPTIONS.map(g => (
-                        <option key={g.value} value={g.value}>{g.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </>
-              )}
-            </div>
-            
-            <div className="mt-6 flex gap-3">
-              <button type="button" onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
-              <button type="submit" className="btn btn-primary flex-1" disabled={submitting}>
-                {submitting ? <div className="spinner w-5 h-5 border-2"></div> : <><Save size={20} /> Save Changes</>}
               </button>
             </div>
           </form>
