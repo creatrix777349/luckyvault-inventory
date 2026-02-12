@@ -4,9 +4,24 @@ import { ToastContainer, useToast } from '../components/Toast'
 import SearchableSelect from '../components/SearchableSelect'
 import { ArrowRightLeft, ArrowRight, Save } from 'lucide-react'
 
+// All valid physical locations for inventory movement
 const ALLOWED_LOCATION_NAMES = [
-  'Master Inventory', 'Stream Room 1', 'Stream Room 2', 'Stream Room 3',
-  'Stream Room 4', 'Stream Room 5', 'Front Store', 'Slab Room', 'Office Safe', 'Other/Out'
+  'Master Inventory',
+  'Front Store',
+  'Office Safe',
+  'Other/Out',
+  'Slab Room',
+  'Storefront',
+  // Stream Rooms
+  'Stream Room - eBay LuckyVaultUS',
+  'Stream Room - eBay SlabbiePatty',
+  'Stream Room - TikTok RocketsHQ',
+  'Stream Room - TikTok Whatnot',
+  'Stream Room - Whatnot Rockets',
+  // Platform locations
+  'Tiktok Packheads',
+  'Tiktok Rockets HQ',
+  'Whatnot'
 ]
 
 // Helper to extract Launch Name

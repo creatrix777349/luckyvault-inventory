@@ -255,8 +255,8 @@ export default function AddProduct() {
 
       {mode === 'single' ? (
         <form onSubmit={handleSubmit} className="card max-w-2xl">
-          {/* Row 1: Brand + Language + Currency */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
+          {/* Row 1: Brand + Language */}
+          <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Brand *</label>
               <select name="brand" value={form.brand} onChange={handleChange} required>
@@ -272,15 +272,6 @@ export default function AddProduct() {
                 <option value="JP">JP (Japanese)</option>
                 <option value="CN">CN (Chinese)</option>
               </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Currency</label>
-              <input
-                type="text"
-                value={getCurrency(form.language)}
-                disabled
-                className="bg-vault-dark/50 text-gray-400"
-              />
             </div>
           </div>
 
@@ -356,20 +347,16 @@ export default function AddProduct() {
 
           {/* Preview */}
           <div className="p-4 bg-vault-dark rounded-lg border border-vault-border mb-6">
-            <p className="text-gray-400 text-sm mb-2">Preview (following sheet structure):</p>
-            <div className="grid grid-cols-6 gap-2 text-xs text-gray-500 mb-1">
+            <p className="text-gray-400 text-sm mb-2">Preview:</p>
+            <div className="grid grid-cols-4 gap-2 text-xs text-gray-500 mb-1">
               <span>BRAND</span>
-              <span className="col-span-2">LAUNCH NAME</span>
-              <span>PRODUCT TYPE</span>
+              <span className="col-span-2">LAUNCH NAME + PRODUCT TYPE</span>
               <span>LANG</span>
-              <span>CURRENCY</span>
             </div>
-            <div className="grid grid-cols-6 gap-2 text-sm">
+            <div className="grid grid-cols-4 gap-2 text-sm">
               <span className="text-vault-gold">{form.brand}</span>
-              <span className="col-span-2 text-white">{form.launch_name || '[Launch Name]'}</span>
-              <span className="text-gray-300">{form.product_type}</span>
+              <span className="col-span-2 text-white">{form.launch_name || '[Launch Name]'} {form.product_type}</span>
               <span className="text-blue-400">{form.language}</span>
-              <span className="text-gray-400">{getCurrency(form.language)}</span>
             </div>
             {form.breakable && form.packs_per_box && (
               <p className="text-green-400 text-sm mt-2">• Breakable: {form.packs_per_box} packs</p>
