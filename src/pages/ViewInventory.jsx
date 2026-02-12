@@ -1,13 +1,31 @@
 import React, { useState, useEffect } from 'react'
 import { fetchInventory, fetchLocations, supabase } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { Eye, Package, Search, Star, Edit2, Save, X, Trash2 } from 'lucide-react'
+import { Eye, Package, Search, Edit2, Save, X, Trash2 } from 'lucide-react'
+
+// Helper to get currency based on language
+const getCurrency = (language) => {
+  switch(language) {
+    case 'JP': return 'YEN'
+    case 'CN': return 'RMB'
+    default: return 'USD'
+  }
+}
+
+// Helper to extract Launch Name from full product name
+// e.g., "Raging Surf Booster Box" -> "Raging Surf"
+const extractLaunchName = (fullName, category) => {
+  if (!fullName) return ''
+  if (!category) return fullName
+  // Remove the category/product type from the end if present
+  const categoryPattern = new RegExp(`\\s*${category}\\s*$`, 'i')
+  return fullName.replace(categoryPattern, '').trim() || fullName
+}
 
 export default function ViewInventory() {
   const { toasts, addToast, removeToast } = useToast()
   
   const [inventory, setInventory] = useState([])
-  const [highValueItems, setHighValueItems] = useState([])
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedLocation, setSelectedLocation] = useState('')
@@ -18,8 +36,6 @@ export default function ViewInventory() {
   })
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({ quantity: '', avg_cost_basis: '' })
-  const [editingHvId, setEditingHvId] = useState(null)
-  const [editHvForm, setEditHvForm] = useState({ purchase_price_usd: '', current_market_price: '' })
 
   useEffect(() => {
     loadData()
@@ -45,20 +61,11 @@ export default function ViewInventory() {
   const loadInventory = async () => {
     try {
       const invData = await fetchInventory(selectedLocation || null)
-      setInventory(invData)
-      
-      // Also fetch high value items
-      let hvQuery = supabase
-        .from('high_value_items')
-        .select('*, location:locations(name)')
-        .eq('status', 'In Inventory')
-      
-      if (selectedLocation) {
-        hvQuery = hvQuery.eq('location_id', selectedLocation)
-      }
-      
-      const { data: hvData } = await hvQuery.order('created_at', { ascending: false })
-      setHighValueItems(hvData || [])
+      // Filter to only sealed products (no singles/slabs)
+      const sealedOnly = invData.filter(inv => 
+        inv.product?.type === 'Sealed' || inv.product?.type === 'Pack'
+      )
+      setInventory(sealedOnly)
     } catch (error) {
       console.error('Error loading inventory:', error)
     }
@@ -68,7 +75,7 @@ export default function ViewInventory() {
     setEditingId(inv.id)
     setEditForm({
       quantity: inv.quantity.toString(),
-      avg_cost_basis: inv.avg_cost_basis?.toString() || ''
+      avg_cost_basis: inv.avg_cost_basis?.toString() || '0'
     })
   }
 
@@ -79,17 +86,12 @@ export default function ViewInventory() {
 
   const saveEdit = async (invId) => {
     try {
-      const updateData = {
-        quantity: parseInt(editForm.quantity) || 0
-      }
-      // Only update avg_cost_basis if it has a value (don't set to 0 for empty)
-      if (editForm.avg_cost_basis !== '') {
-        updateData.avg_cost_basis = parseFloat(editForm.avg_cost_basis)
-      }
-
       const { error } = await supabase
         .from('inventory')
-        .update(updateData)
+        .update({
+          quantity: parseInt(editForm.quantity) || 0,
+          avg_cost_basis: parseFloat(editForm.avg_cost_basis) || 0
+        })
         .eq('id', invId)
 
       if (error) throw error
@@ -103,60 +105,18 @@ export default function ViewInventory() {
     }
   }
 
-  // High Value item edit functions
-  const startHvEdit = (item) => {
-    setEditingHvId(item.id)
-    setEditHvForm({
-      purchase_price_usd: item.purchase_price_usd?.toString() || '',
-      current_market_price: item.current_market_price?.toString() || ''
-    })
-  }
-
-  const cancelHvEdit = () => {
-    setEditingHvId(null)
-    setEditHvForm({ purchase_price_usd: '', current_market_price: '' })
-  }
-
-  const saveHvEdit = async (itemId) => {
-    try {
-      const updateData = {}
-      if (editHvForm.purchase_price_usd !== '') {
-        updateData.purchase_price_usd = parseFloat(editHvForm.purchase_price_usd)
-        updateData.purchase_price = parseFloat(editHvForm.purchase_price_usd)
-      }
-      if (editHvForm.current_market_price !== '') {
-        updateData.current_market_price = parseFloat(editHvForm.current_market_price)
-      }
-
-      const { error } = await supabase
-        .from('high_value_items')
-        .update(updateData)
-        .eq('id', itemId)
-
-      if (error) throw error
-
-      addToast('High value item updated!')
-      setEditingHvId(null)
-      loadInventory()
-    } catch (error) {
-      console.error('Error updating high value item:', error)
-      addToast('Failed to update item', 'error')
-    }
-  }
-
-  // Soft delete inventory item
   const deleteInventory = async (invId) => {
-    if (!confirm('Are you sure you want to delete this inventory entry?')) return
+    if (!confirm('Are you sure you want to delete this inventory record?')) return
     
     try {
       const { error } = await supabase
         .from('inventory')
-        .update({ deleted: true, deleted_at: new Date().toISOString() })
+        .delete()
         .eq('id', invId)
 
       if (error) throw error
 
-      addToast('Inventory entry deleted')
+      addToast('Inventory deleted!')
       loadInventory()
     } catch (error) {
       console.error('Error deleting inventory:', error)
@@ -164,199 +124,35 @@ export default function ViewInventory() {
     }
   }
 
-  // Soft delete high value item
-  const deleteHvItem = async (itemId) => {
-    if (!confirm('Are you sure you want to delete this high value item?')) return
-    
-    try {
-      const { error } = await supabase
-        .from('high_value_items')
-        .update({ deleted: true, deleted_at: new Date().toISOString() })
-        .eq('id', itemId)
-
-      if (error) throw error
-
-      addToast('High value item deleted')
-      loadInventory()
-    } catch (error) {
-      console.error('Error deleting high value item:', error)
-      addToast('Failed to delete item', 'error')
-    }
-  }
-
-  // Helper function to check if an inventory item is high value
-  const isHighValueItem = (inv) => {
-    // Check if it has current_market_price >= $200
-    if (inv.current_market_price && inv.current_market_price >= 200) return true
-    // Check if it's marked as high value
-    if (inv.is_high_value) return true
-    // Check if it's a slab type with avg_cost_basis >= $200
-    if (inv.product?.type === 'Slab' && inv.avg_cost_basis && inv.avg_cost_basis >= 200) return true
-    return false
-  }
-
-  // Filter regular inventory
+  // Filter inventory
   const filteredInventory = inventory.filter(inv => {
     if (filters.brand && inv.product?.brand !== filters.brand) return false
     if (filters.type && inv.product?.type !== filters.type) return false
     if (searchTerm) {
       const search = searchTerm.toLowerCase()
-      const matchesName = inv.product?.name?.toLowerCase().includes(search)
-      const matchesBrand = inv.product?.brand?.toLowerCase().includes(search)
-      if (!matchesName && !matchesBrand) return false
+      const launchName = extractLaunchName(inv.product?.name, inv.product?.category)
+      return (
+        launchName.toLowerCase().includes(search) ||
+        inv.product?.brand?.toLowerCase().includes(search) ||
+        inv.product?.category?.toLowerCase().includes(search)
+      )
     }
     return true
   })
 
-  // Filter high value items
-  const filteredHighValue = highValueItems.filter(item => {
-    if (filters.brand && item.brand !== filters.brand) return false
-    if (filters.type && item.item_type !== filters.type) return false
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase()
-      const matchesName = item.card_name?.toLowerCase().includes(search)
-      const matchesBrand = item.brand?.toLowerCase().includes(search)
-      if (!matchesName && !matchesBrand) return false
-    }
-    return true
-  })
-
-  // Group regular inventory by location
+  // Group by location
   const groupedByLocation = filteredInventory.reduce((acc, inv) => {
     const locName = inv.location?.name || 'Unknown'
-    if (!acc[locName]) acc[locName] = { regular: [], highValue: [] }
-    acc[locName].regular.push(inv)
+    if (!acc[locName]) acc[locName] = []
+    acc[locName].push(inv)
     return acc
   }, {})
 
-  // Add high value items to location groups
-  filteredHighValue.forEach(item => {
-    const locName = item.location?.name || 'Unknown'
-    if (!groupedByLocation[locName]) groupedByLocation[locName] = { regular: [], highValue: [] }
-    groupedByLocation[locName].highValue.push(item)
-  })
-
-  // Calculate totals including high value items
-  const regularValue = filteredInventory.reduce((sum, inv) => 
+  // Calculate totals
+  const totalValue = filteredInventory.reduce((sum, inv) => 
     sum + (inv.quantity * (inv.avg_cost_basis || 0)), 0
   )
-  const highValueTotal = filteredHighValue.reduce((sum, item) => 
-    sum + (item.purchase_price_usd || 0), 0
-  )
-  const totalValue = regularValue + highValueTotal
-
-  const regularItems = filteredInventory.reduce((sum, inv) => sum + inv.quantity, 0)
-  const totalItems = regularItems + filteredHighValue.length
-
-  // Count high value regular inventory items
-  const highValueRegularCount = filteredInventory.filter(inv => isHighValueItem(inv)).reduce((sum, inv) => sum + inv.quantity, 0)
-
-  // Render inventory row with edit capability
-  const renderInventoryRow = (inv) => {
-    const isEditing = editingId === inv.id
-    const isHV = isHighValueItem(inv)
-
-    return (
-      <tr key={`reg-${inv.id}`} className={isHV ? 'bg-yellow-500/5' : ''}>
-        <td className="font-medium text-white">
-          <div className="flex items-center gap-2">
-            {isHV && <Star size={14} className="text-yellow-400 flex-shrink-0" />}
-            <span>{inv.product?.name}</span>
-            {inv.grading_company && (
-              <span className="text-purple-400 text-xs font-medium">{inv.grading_company} {inv.grade}</span>
-            )}
-          </div>
-        </td>
-        <td>
-          <span className={`badge ${inv.product?.brand === 'Pokemon' ? 'badge-warning' : inv.product?.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'}`}>
-            {inv.product?.brand}
-          </span>
-        </td>
-        <td className="text-gray-400">{inv.product?.type}</td>
-        <td className="text-gray-400">{inv.product?.category}</td>
-        <td className="text-gray-400">{inv.product?.language}</td>
-        <td className="text-right">
-          {isEditing ? (
-            <input
-              type="number"
-              value={editForm.quantity}
-              onChange={(e) => setEditForm(f => ({ ...f, quantity: e.target.value }))}
-              className="w-20 text-right py-1 px-2 text-sm"
-              min="0"
-            />
-          ) : (
-            <span className="font-medium">{inv.quantity}</span>
-          )}
-        </td>
-        <td className="text-right">
-          {isEditing ? (
-            <input
-              type="number"
-              value={editForm.avg_cost_basis}
-              onChange={(e) => setEditForm(f => ({ ...f, avg_cost_basis: e.target.value }))}
-              className="w-24 text-right py-1 px-2 text-sm"
-              min="0"
-              step="0.01"
-              placeholder="Unknown"
-            />
-          ) : (
-            <span className="text-gray-400">
-              {inv.avg_cost_basis != null ? `$${inv.avg_cost_basis.toFixed(2)}` : '-'}
-            </span>
-          )}
-        </td>
-        <td className="text-right">
-          {inv.current_market_price != null ? (
-            <span className={`font-medium ${isHV ? 'text-yellow-400' : 'text-blue-400'}`}>
-              ${inv.current_market_price.toFixed(2)}
-            </span>
-          ) : (
-            <span className="text-gray-500">-</span>
-          )}
-        </td>
-        <td className="text-right text-vault-gold font-medium">
-          ${(inv.quantity * (inv.avg_cost_basis || 0)).toFixed(2)}
-        </td>
-        <td className="text-right">
-          {isEditing ? (
-            <div className="flex items-center justify-end gap-1">
-              <button
-                onClick={() => saveEdit(inv.id)}
-                className="p-1 text-green-400 hover:text-green-300"
-                title="Save"
-              >
-                <Save size={16} />
-              </button>
-              <button
-                onClick={cancelEdit}
-                className="p-1 text-gray-400 hover:text-white"
-                title="Cancel"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center justify-end gap-1">
-              <button
-                onClick={() => startEdit(inv)}
-                className="p-1 text-gray-500 hover:text-white"
-                title="Edit"
-              >
-                <Edit2 size={16} />
-              </button>
-              <button
-                onClick={() => deleteInventory(inv.id)}
-                className="p-1 text-gray-500 hover:text-red-400"
-                title="Delete"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          )}
-        </td>
-      </tr>
-    )
-  }
+  const totalItems = filteredInventory.reduce((sum, inv) => sum + inv.quantity, 0)
 
   if (loading) {
     return (
@@ -375,7 +171,7 @@ export default function ViewInventory() {
           <Eye className="text-slate-400" />
           View Inventory
         </h1>
-        <p className="text-gray-400 mt-1">View inventory across all locations</p>
+        <p className="text-gray-400 mt-1">View sealed product inventory across all locations</p>
       </div>
 
       {/* Filters */}
@@ -408,16 +204,14 @@ export default function ViewInventory() {
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Sealed/Unsealed</label>
             <select
               value={filters.type}
               onChange={(e) => setFilters(f => ({ ...f, type: e.target.value }))}
             >
-              <option value="">All Types</option>
+              <option value="">All</option>
               <option value="Sealed">Sealed</option>
-              <option value="Pack">Pack</option>
-              <option value="Single">Single</option>
-              <option value="Slab">Slab</option>
+              <option value="Pack">Pack (Unsealed)</option>
             </select>
           </div>
           
@@ -429,7 +223,7 @@ export default function ViewInventory() {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search products..."
+                placeholder="Search by launch name..."
                 className="pl-10"
               />
             </div>
@@ -437,266 +231,165 @@ export default function ViewInventory() {
         </div>
       </div>
 
-      {/* Summary Stats */}
+      {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="card">
+        <div className="card text-center">
           <p className="text-gray-400 text-sm">Total Items</p>
-          <p className="font-display text-2xl font-bold text-white">{totalItems.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-white">{totalItems.toLocaleString()}</p>
         </div>
-        <div className="card">
-          <p className="text-gray-400 text-sm">Total Value (Cost Basis)</p>
-          <p className="font-display text-2xl font-bold text-vault-gold">${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+        <div className="card text-center">
+          <p className="text-gray-400 text-sm">Total Value</p>
+          <p className="text-2xl font-bold text-vault-gold">${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
         </div>
-        <div className="card">
-          <p className="text-gray-400 text-sm">Unique Products</p>
-          <p className="font-display text-2xl font-bold text-white">{filteredInventory.length + filteredHighValue.length}</p>
+        <div className="card text-center">
+          <p className="text-gray-400 text-sm">Locations</p>
+          <p className="text-2xl font-bold text-white">{Object.keys(groupedByLocation).length}</p>
         </div>
-        <div className="card">
-          <p className="text-gray-400 text-sm">High Value ($200+)</p>
-          <p className="font-display text-2xl font-bold text-yellow-400 flex items-center gap-1">
-            <Star size={18} />
-            {highValueRegularCount + filteredHighValue.length}
-          </p>
-        </div>
-      </div>
-
-      {/* Legend */}
-      <div className="flex items-center gap-4 mb-4 text-sm">
-        <div className="flex items-center gap-2">
-          <Star size={14} className="text-yellow-400" />
-          <span className="text-gray-400">= High Value ($200+ market price)</span>
+        <div className="card text-center">
+          <p className="text-gray-400 text-sm">SKUs</p>
+          <p className="text-2xl font-bold text-white">{filteredInventory.length}</p>
         </div>
       </div>
 
       {/* Inventory by Location */}
-      {!selectedLocation ? (
-        // Grouped view
-        Object.entries(groupedByLocation).map(([locName, items]) => {
-          const locRegularValue = items.regular.reduce((sum, inv) => sum + (inv.quantity * (inv.avg_cost_basis || 0)), 0)
-          const locHighValueTotal = items.highValue.reduce((sum, item) => sum + (item.purchase_price_usd || 0), 0)
-          const locTotalValue = locRegularValue + locHighValueTotal
-          const locTotalItems = items.regular.reduce((sum, inv) => sum + inv.quantity, 0) + items.highValue.length
-          
-          return (
-            <div key={locName} className="mb-6">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="font-display text-lg font-semibold text-white flex items-center gap-2">
-                  <Package size={20} className="text-vault-gold" />
-                  {locName}
-                  <span className="text-gray-500 text-sm font-normal">
-                    ({locTotalItems} items)
-                  </span>
-                </h3>
-                <span className="text-vault-gold font-semibold">
-                  ${locTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
+      {Object.entries(groupedByLocation).map(([locationName, items]) => {
+        const locationTotal = items.reduce((sum, inv) => sum + (inv.quantity * (inv.avg_cost_basis || 0)), 0)
+        const locationItems = items.reduce((sum, inv) => sum + inv.quantity, 0)
+
+        return (
+          <div key={locationName} className="card mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-3">
+                <Package className="text-vault-gold" size={20} />
+                <h2 className="font-display text-lg font-semibold text-white">
+                  {locationName}
+                </h2>
+                <span className="text-gray-400 text-sm">({locationItems} items)</span>
               </div>
-              <div className="card overflow-x-auto">
-                {items.regular.length === 0 && items.highValue.length === 0 ? (
-                  <p className="text-gray-400 text-center py-4">No inventory</p>
-                ) : (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Product</th>
-                        <th>Brand</th>
-                        <th>Type</th>
-                        <th>Category</th>
-                        <th>Lang</th>
-                        <th className="text-right">Qty</th>
-                        <th className="text-right">Avg Cost</th>
-                        <th className="text-right">Market</th>
-                        <th className="text-right">Total Value</th>
-                        <th className="text-right w-24">Actions</th>
+              <span className="text-vault-gold font-semibold">
+                ${locationTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left text-gray-400 text-sm border-b border-vault-border">
+                    <th className="pb-3 font-medium">LAUNCH NAME</th>
+                    <th className="pb-3 font-medium">BRAND</th>
+                    <th className="pb-3 font-medium">PRODUCT TYPE</th>
+                    <th className="pb-3 font-medium">SEALED</th>
+                    <th className="pb-3 font-medium">LANG</th>
+                    <th className="pb-3 font-medium text-right">QTY</th>
+                    <th className="pb-3 font-medium text-right">AVG COST</th>
+                    <th className="pb-3 font-medium text-center">CURRENCY</th>
+                    <th className="pb-3 font-medium text-right">TOTAL VALUE</th>
+                    <th className="pb-3 font-medium text-right">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-vault-border">
+                  {items.map(inv => {
+                    const isEditing = editingId === inv.id
+                    const launchName = extractLaunchName(inv.product?.name, inv.product?.category)
+                    const currency = getCurrency(inv.product?.language)
+                    
+                    return (
+                      <tr key={inv.id} className="hover:bg-vault-dark/50">
+                        <td className="py-3 font-medium text-white">{launchName}</td>
+                        <td className="py-3">
+                          <span className={`badge ${
+                            inv.product?.brand === 'Pokemon' ? 'badge-warning' : 
+                            inv.product?.brand === 'One Piece' ? 'badge-info' : 
+                            'badge-secondary'
+                          }`}>
+                            {inv.product?.brand}
+                          </span>
+                        </td>
+                        <td className="py-3 text-gray-300">{inv.product?.category || '-'}</td>
+                        <td className="py-3 text-gray-400">{inv.product?.type}</td>
+                        <td className="py-3 text-gray-400">{inv.product?.language}</td>
+                        <td className="py-3 text-right">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editForm.quantity}
+                              onChange={(e) => setEditForm(f => ({ ...f, quantity: e.target.value }))}
+                              className="w-20 text-right py-1 px-2 text-sm"
+                              min="0"
+                            />
+                          ) : (
+                            <span className="font-medium">{inv.quantity}</span>
+                          )}
+                        </td>
+                        <td className="py-3 text-right">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editForm.avg_cost_basis}
+                              onChange={(e) => setEditForm(f => ({ ...f, avg_cost_basis: e.target.value }))}
+                              className="w-24 text-right py-1 px-2 text-sm"
+                              min="0"
+                              step="0.01"
+                            />
+                          ) : (
+                            <span className="text-gray-400">${inv.avg_cost_basis?.toFixed(2) || '0.00'}</span>
+                          )}
+                        </td>
+                        <td className="py-3 text-center text-gray-500 text-sm">{currency}</td>
+                        <td className="py-3 text-right text-vault-gold font-medium">
+                          ${(inv.quantity * (inv.avg_cost_basis || 0)).toFixed(2)}
+                        </td>
+                        <td className="py-3 text-right">
+                          {isEditing ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => saveEdit(inv.id)}
+                                className="p-1 text-green-400 hover:text-green-300"
+                                title="Save"
+                              >
+                                <Save size={16} />
+                              </button>
+                              <button
+                                onClick={cancelEdit}
+                                className="p-1 text-gray-400 hover:text-white"
+                                title="Cancel"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => startEdit(inv)}
+                                className="p-1 text-gray-500 hover:text-white"
+                                title="Edit"
+                              >
+                                <Edit2 size={16} />
+                              </button>
+                              <button
+                                onClick={() => deleteInventory(inv.id)}
+                                className="p-1 text-gray-500 hover:text-red-400"
+                                title="Delete"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {/* Regular inventory items */}
-                      {items.regular.map(inv => renderInventoryRow(inv))}
-                      {/* High value items from library */}
-                      {items.highValue.map(item => {
-                        const isEditingHv = editingHvId === item.id
-                        return (
-                          <tr key={`hv-${item.id}`} className="bg-yellow-500/5">
-                            <td className="font-medium text-white flex items-center gap-2">
-                              <Star size={14} className="text-yellow-400" />
-                              {item.card_name}
-                              {item.grading_company && <span className="text-purple-400 text-xs font-medium">{item.grading_company} {item.grade}</span>}
-                            </td>
-                            <td>
-                              <span className={`badge ${item.brand === 'Pokemon' ? 'badge-warning' : item.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'}`}>
-                                {item.brand}
-                              </span>
-                            </td>
-                            <td className="text-gray-400">{item.item_type}</td>
-                            <td className="text-gray-400">{item.item_type}</td>
-                            <td className="text-gray-400">-</td>
-                            <td className="text-right font-medium">1</td>
-                            <td className="text-right">
-                              {isEditingHv ? (
-                                <input
-                                  type="number"
-                                  value={editHvForm.purchase_price_usd}
-                                  onChange={(e) => setEditHvForm(f => ({ ...f, purchase_price_usd: e.target.value }))}
-                                  className="w-24 text-right py-1 px-2 text-sm"
-                                  min="0"
-                                  step="0.01"
-                                  placeholder="Cost"
-                                />
-                              ) : (
-                                <span className="text-gray-400">{item.purchase_price_usd != null ? `$${item.purchase_price_usd.toFixed(2)}` : '-'}</span>
-                              )}
-                            </td>
-                            <td className="text-right">
-                              {isEditingHv ? (
-                                <input
-                                  type="number"
-                                  value={editHvForm.current_market_price}
-                                  onChange={(e) => setEditHvForm(f => ({ ...f, current_market_price: e.target.value }))}
-                                  className="w-24 text-right py-1 px-2 text-sm"
-                                  min="0"
-                                  step="0.01"
-                                  placeholder="Market"
-                                />
-                              ) : (
-                                <span className="text-yellow-400 font-medium">{item.current_market_price != null ? `$${item.current_market_price.toFixed(2)}` : '-'}</span>
-                              )}
-                            </td>
-                            <td className="text-right text-vault-gold font-medium">
-                              ${item.purchase_price_usd?.toFixed(2) || '-'}
-                            </td>
-                            <td className="text-right">
-                              {isEditingHv ? (
-                                <div className="flex items-center justify-end gap-1">
-                                  <button onClick={() => saveHvEdit(item.id)} className="p-1 text-green-400 hover:text-green-300" title="Save">
-                                    <Save size={16} />
-                                  </button>
-                                  <button onClick={cancelHvEdit} className="p-1 text-gray-400 hover:text-white" title="Cancel">
-                                    <X size={16} />
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-end gap-1">
-                                  <button onClick={() => startHvEdit(item)} className="p-1 text-gray-500 hover:text-white" title="Edit">
-                                    <Edit2 size={16} />
-                                  </button>
-                                  <button onClick={() => deleteHvItem(item.id)} className="p-1 text-gray-500 hover:text-red-400" title="Delete">
-                                    <Trash2 size={16} />
-                                  </button>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-          )
-        })
-      ) : (
-        // Single location view
-        <div className="card overflow-x-auto">
-          {filteredInventory.length === 0 && filteredHighValue.length === 0 ? (
-            <div className="text-center py-12">
-              <Package className="mx-auto text-gray-600 mb-4" size={48} />
-              <p className="text-gray-400">No inventory found</p>
-            </div>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th>Brand</th>
-                  <th>Type</th>
-                  <th>Category</th>
-                  <th>Lang</th>
-                  <th className="text-right">Qty</th>
-                  <th className="text-right">Avg Cost</th>
-                  <th className="text-right">Market</th>
-                  <th className="text-right">Total Value</th>
-                  <th className="text-right w-16">Edit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* Regular inventory items */}
-                {filteredInventory.map(inv => renderInventoryRow(inv))}
-                {/* High value items from library */}
-                {filteredHighValue.map(item => {
-                  const isEditingHv = editingHvId === item.id
-                  return (
-                    <tr key={`hv-${item.id}`} className="bg-yellow-500/5">
-                      <td className="font-medium text-white flex items-center gap-2">
-                        <Star size={14} className="text-yellow-400" />
-                        {item.card_name}
-                        {item.grading_company && <span className="text-purple-400 text-xs font-medium">{item.grading_company} {item.grade}</span>}
-                      </td>
-                      <td>
-                        <span className={`badge ${item.brand === 'Pokemon' ? 'badge-warning' : item.brand === 'One Piece' ? 'badge-info' : 'badge-secondary'}`}>
-                          {item.brand}
-                        </span>
-                      </td>
-                      <td className="text-gray-400">{item.item_type}</td>
-                      <td className="text-gray-400">{item.item_type}</td>
-                      <td className="text-gray-400">-</td>
-                      <td className="text-right font-medium">1</td>
-                      <td className="text-right">
-                        {isEditingHv ? (
-                          <input
-                            type="number"
-                            value={editHvForm.purchase_price_usd}
-                            onChange={(e) => setEditHvForm(f => ({ ...f, purchase_price_usd: e.target.value }))}
-                            className="w-24 text-right py-1 px-2 text-sm"
-                            min="0"
-                            step="0.01"
-                            placeholder="Cost"
-                          />
-                        ) : (
-                          <span className="text-gray-400">{item.purchase_price_usd != null ? `$${item.purchase_price_usd.toFixed(2)}` : '-'}</span>
-                        )}
-                      </td>
-                      <td className="text-right">
-                        {isEditingHv ? (
-                          <input
-                            type="number"
-                            value={editHvForm.current_market_price}
-                            onChange={(e) => setEditHvForm(f => ({ ...f, current_market_price: e.target.value }))}
-                            className="w-24 text-right py-1 px-2 text-sm"
-                            min="0"
-                            step="0.01"
-                            placeholder="Market"
-                          />
-                        ) : (
-                          <span className="text-yellow-400 font-medium">{item.current_market_price != null ? `$${item.current_market_price.toFixed(2)}` : '-'}</span>
-                        )}
-                      </td>
-                      <td className="text-right text-vault-gold font-medium">
-                        ${item.purchase_price_usd?.toFixed(2) || '-'}
-                      </td>
-                      <td className="text-right">
-                        {isEditingHv ? (
-                          <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => saveHvEdit(item.id)} className="p-1 text-green-400 hover:text-green-300" title="Save">
-                              <Save size={16} />
-                            </button>
-                            <button onClick={cancelHvEdit} className="p-1 text-gray-400 hover:text-white" title="Cancel">
-                              <X size={16} />
-                            </button>
-                          </div>
-                        ) : (
-                          <button onClick={() => startHvEdit(item)} className="p-1 text-gray-500 hover:text-white" title="Edit">
-                            <Edit2 size={16} />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
+          </div>
+        )
+      })}
+
+      {filteredInventory.length === 0 && (
+        <div className="card text-center py-12">
+          <Package className="mx-auto text-gray-600 mb-4" size={48} />
+          <p className="text-gray-400">No inventory found</p>
         </div>
       )}
     </div>
