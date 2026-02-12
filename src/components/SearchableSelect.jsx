@@ -29,19 +29,35 @@ export default function SearchableSelect({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Filter options based on search term
-  const filteredOptions = options.filter(option => {
-    if (!searchTerm) return true
-    const search = searchTerm.toLowerCase()
+  // Improved fuzzy search - matches any part of words
+  const matchesSearch = (option, search) => {
+    if (!search) return true
     
-    // Search across all string values in the object
-    if (typeof option === 'object') {
-      return Object.values(option).some(val => 
-        val && String(val).toLowerCase().includes(search)
-      )
+    const searchLower = search.toLowerCase().trim()
+    const searchTerms = searchLower.split(/\s+/) // Split by spaces for multi-word search
+    
+    // Get the label text to search against
+    let labelText = ''
+    if (getOptionLabel) {
+      labelText = getOptionLabel(option).toLowerCase()
+    } else if (typeof option === 'object') {
+      // Search across key fields: name, brand, category, language
+      const searchableFields = ['name', 'brand', 'category', 'language', 'label']
+      labelText = searchableFields
+        .map(field => option[field] || (option.product && option.product[field]) || '')
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+    } else {
+      labelText = String(option).toLowerCase()
     }
-    return String(option).toLowerCase().includes(search)
-  })
+    
+    // All search terms must match somewhere in the label
+    return searchTerms.every(term => labelText.includes(term))
+  }
+
+  // Filter options based on search term
+  const filteredOptions = options.filter(option => matchesSearch(option, searchTerm))
 
   // Get selected option
   const selectedOption = value ? options.find(opt => getOptionValue(opt) === value) : null
@@ -119,7 +135,7 @@ export default function SearchableSelect({
         <div className="absolute z-50 w-full mt-1 bg-vault-surface border border-vault-border rounded-lg shadow-xl max-h-60 overflow-y-auto">
           {filteredOptions.length === 0 ? (
             <div className="px-3 py-3 text-gray-500 text-sm text-center">
-              {searchTerm ? 'No results found' : 'Type to search...'}
+              {searchTerm ? `No results for "${searchTerm}"` : 'Type to search...'}
             </div>
           ) : (
             filteredOptions.slice(0, 50).map((option, index) => {
@@ -143,7 +159,7 @@ export default function SearchableSelect({
           )}
           {filteredOptions.length > 50 && (
             <div className="px-3 py-2 text-gray-500 text-xs text-center border-t border-vault-border">
-              Showing first 50 results. Type more to narrow down.
+              Showing first 50 of {filteredOptions.length} results. Type more to narrow down.
             </div>
           )}
         </div>
