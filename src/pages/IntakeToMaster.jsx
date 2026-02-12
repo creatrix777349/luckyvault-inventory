@@ -11,6 +11,14 @@ import {
 import { ToastContainer, useToast } from '../components/Toast'
 import { Package, Check, AlertTriangle } from 'lucide-react'
 
+// Helper to extract Launch Name from full product name
+const extractLaunchName = (fullName, category) => {
+  if (!fullName) return ''
+  if (!category) return fullName
+  const categoryPattern = new RegExp(`\\s*${category}\\s*$`, 'i')
+  return fullName.replace(categoryPattern, '').trim() || fullName
+}
+
 export default function IntakeToMaster() {
   
   const { toasts, addToast, removeToast } = useToast()
@@ -172,11 +180,15 @@ function IntakeCard({ acquisition, onReceive, processing }) {
           </div>
           
           <h3 className="font-display text-lg font-semibold text-white">
-            {acquisition.product?.brand} - {acquisition.product?.name}
+            <span className="text-vault-gold">{acquisition.product?.brand}</span>
+            <span className="text-gray-400"> | </span>
+            {extractLaunchName(acquisition.product?.name, acquisition.product?.category)}
+            <span className="text-gray-400"> | </span>
+            <span className="text-gray-300">{acquisition.product?.category}</span>
           </h3>
           
           <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-400">
-            <span>Type: {acquisition.product?.type}</span>
+            <span>Sealed/Unsealed: {acquisition.product?.type}</span>
             <span>Language: {acquisition.product?.language}</span>
             <span>Acquirer: {acquisition.acquirer?.name}</span>
           </div>
