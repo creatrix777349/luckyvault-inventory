@@ -213,7 +213,8 @@ export default function StreamCounts() {
     
     try {
       // Build count time from date and time inputs
-      const countDateTime = new Date(`${form.count_date}T${form.count_time}:00`)
+      // Save as local time string (not UTC) so reports match the date entered
+      const countTimeString = `${form.count_date}T${form.count_time}:00`
       
       // Calculate totals and build items
       let totalSold = 0
@@ -244,7 +245,7 @@ export default function StreamCounts() {
         location_id: form.location_id,
         streamer_id: form.streamer_id,
         counted_by_id: form.counted_by_id,
-        count_time: countDateTime.toISOString(),
+        count_time: countTimeString,
         status: totalDiscrepancies > 0 ? 'has_discrepancies' : 'complete',
         total_sold: totalSold,
         total_discrepancies: totalDiscrepancies
