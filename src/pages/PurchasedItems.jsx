@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { 
   fetchProducts, fetchUsers, fetchVendors, fetchPaymentMethods,
-  createAcquisition, createVendor, convertToUSD, getExchangeRates
+  createAcquisition, createVendor, createPaymentMethod, convertToUSD, getExchangeRates
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
 import SearchableSelect from '../components/SearchableSelect'
@@ -27,6 +27,8 @@ export default function PurchasedItems() {
   const [showNewVendor, setShowNewVendor] = useState(false)
   const [newVendorName, setNewVendorName] = useState('')
   const [newVendorCountry, setNewVendorCountry] = useState('USA')
+  const [showNewPayment, setShowNewPayment] = useState(false)
+  const [newPaymentName, setNewPaymentName] = useState('')
 
   const [header, setHeader] = useState({
     date_purchased: new Date().toISOString().split('T')[0],
@@ -115,6 +117,20 @@ export default function PurchasedItems() {
       addToast('Vendor added')
     } catch (error) {
       addToast('Failed to add vendor', 'error')
+    }
+  }
+
+  const handleAddPaymentMethod = async () => {
+    if (!newPaymentName.trim()) return
+    try {
+      const pm = await createPaymentMethod({ name: newPaymentName.trim() })
+      setPaymentMethods([...paymentMethods, pm])
+      setHeader(h => ({ ...h, payment_method_id: pm.id }))
+      setShowNewPayment(false)
+      setNewPaymentName('')
+      addToast('Payment method added')
+    } catch (error) {
+      addToast('Failed to add payment method', 'error')
     }
   }
 
@@ -249,10 +265,21 @@ export default function PurchasedItems() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Payment Method</label>
-              <select name="payment_method_id" value={header.payment_method_id} onChange={handleHeaderChange}>
-                <option value="">Select...</option>
-                {paymentMethods.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
-              </select>
+              {showNewPayment ? (
+                <div className="flex gap-2">
+                  <input type="text" value={newPaymentName} onChange={(e) => setNewPaymentName(e.target.value)} placeholder="Payment method name" className="flex-1" />
+                  <button type="button" onClick={handleAddPaymentMethod} className="btn btn-primary p-2"><Save size={18} /></button>
+                  <button type="button" onClick={() => setShowNewPayment(false)} className="btn btn-secondary p-2"><X size={18} /></button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <select name="payment_method_id" value={header.payment_method_id} onChange={handleHeaderChange} className="flex-1">
+                    <option value="">Select...</option>
+                    {paymentMethods.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
+                  </select>
+                  <button type="button" onClick={() => setShowNewPayment(true)} className="btn btn-secondary p-2"><Plus size={18} /></button>
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Currency *</label>

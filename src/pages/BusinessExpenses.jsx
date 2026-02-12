@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase, convertToUSD } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
-import { Receipt, Truck, Building, Zap, Utensils, Plane, MoreHorizontal, Save, DollarSign } from 'lucide-react'
+import { Receipt, Truck, Building, Zap, Utensils, Plane, MoreHorizontal, Save, DollarSign, Plus, X } from 'lucide-react'
 
 const EXPENSE_CATEGORIES = [
   { id: 'shipping', name: 'Shipping', icon: Truck, color: 'text-blue-400' },
@@ -19,6 +19,8 @@ export default function BusinessExpenses() {
   const [submitting, setSubmitting] = useState(false)
   const [expenses, setExpenses] = useState([])
   const [paymentMethods, setPaymentMethods] = useState([])
+  const [showNewPayment, setShowNewPayment] = useState(false)
+  const [newPaymentName, setNewPaymentName] = useState('')
 
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -116,6 +118,27 @@ export default function BusinessExpenses() {
     return EXPENSE_CATEGORIES.find(c => c.id === catId) || EXPENSE_CATEGORIES[5]
   }
 
+  const handleAddPaymentMethod = async () => {
+    if (!newPaymentName.trim()) return
+    try {
+      const { data, error } = await supabase
+        .from('payment_methods')
+        .insert({ name: newPaymentName.trim() })
+        .select()
+        .single()
+      
+      if (error) throw error
+      
+      setPaymentMethods([...paymentMethods, data])
+      setForm(f => ({ ...f, payment_method_id: data.id }))
+      setShowNewPayment(false)
+      setNewPaymentName('')
+      addToast('Payment method added')
+    } catch (error) {
+      addToast('Failed to add payment method', 'error')
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -186,16 +209,34 @@ export default function BusinessExpenses() {
           {/* Payment Method */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Payment Method</label>
-            <select
-              name="payment_method_id"
-              value={form.payment_method_id}
-              onChange={handleChange}
-            >
-              <option value="">Select payment method...</option>
-              {paymentMethods.map(pm => (
-                <option key={pm.id} value={pm.id}>{pm.name}</option>
-              ))}
-            </select>
+            {showNewPayment ? (
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={newPaymentName} 
+                  onChange={(e) => setNewPaymentName(e.target.value)} 
+                  placeholder="Payment method name" 
+                  className="flex-1" 
+                />
+                <button type="button" onClick={handleAddPaymentMethod} className="btn btn-primary p-2"><Save size={18} /></button>
+                <button type="button" onClick={() => setShowNewPayment(false)} className="btn btn-secondary p-2"><X size={18} /></button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <select
+                  name="payment_method_id"
+                  value={form.payment_method_id}
+                  onChange={handleChange}
+                  className="flex-1"
+                >
+                  <option value="">Select payment method...</option>
+                  {paymentMethods.map(pm => (
+                    <option key={pm.id} value={pm.id}>{pm.name}</option>
+                  ))}
+                </select>
+                <button type="button" onClick={() => setShowNewPayment(true)} className="btn btn-secondary p-2"><Plus size={18} /></button>
+              </div>
+            )}
           </div>
 
           {/* Description */}
