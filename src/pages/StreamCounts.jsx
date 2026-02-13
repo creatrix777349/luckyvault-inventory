@@ -11,6 +11,7 @@ import {
   fetchStreamCountItems
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
+import Instructions from '../components/Instructions'
 import { 
   ClipboardList, 
   Play, 
@@ -213,8 +214,13 @@ export default function StreamCounts() {
     
     try {
       // Build count time from date and time inputs
-      // Save as local time string (not UTC) so reports match the date entered
-      const countTimeString = `${form.count_date}T${form.count_time}:00`
+      // Get local timezone offset and append it so Postgres doesn't convert to UTC
+      const localDate = new Date(`${form.count_date}T${form.count_time}:00`)
+      const tzOffset = -localDate.getTimezoneOffset()
+      const tzHours = Math.floor(Math.abs(tzOffset) / 60).toString().padStart(2, '0')
+      const tzMins = (Math.abs(tzOffset) % 60).toString().padStart(2, '0')
+      const tzSign = tzOffset >= 0 ? '+' : '-'
+      const countTimeString = `${form.count_date}T${form.count_time}:00${tzSign}${tzHours}:${tzMins}`
       
       // Calculate totals and build items
       let totalSold = 0
@@ -373,6 +379,30 @@ export default function StreamCounts() {
           </h1>
           <p className="text-gray-400 mt-1">Record inventory counts after each stream</p>
         </div>
+      </div>
+
+      <Instructions title="How to use Stream Counts">
+        <div className="space-y-3 text-gray-300">
+          <p className="font-medium text-white">After each stream ends, log the remaining inventory count:</p>
+          <ol className="list-decimal list-inside space-y-2 ml-2">
+            <li>Select your <span className="text-vault-gold">Stream Room</span> from the dropdown</li>
+            <li>Select <span className="text-vault-gold">Streamer</span> (who ran the stream)</li>
+            <li>Select <span className="text-vault-gold">Counted By</span> (who is doing the count)</li>
+            <li>Click <span className="text-vault-gold">Start Count</span></li>
+            <li>Enter the <span className="text-vault-gold">actual quantity</span> for each product shown</li>
+            <li>Click <span className="text-vault-gold">Submit Count</span></li>
+          </ol>
+          <div className="mt-4 p-3 bg-vault-surface rounded border border-vault-border">
+            <p className="font-medium text-white mb-2">What the numbers mean:</p>
+            <ul className="space-y-1">
+              <li><span className="text-green-400">Expected 10, Actual 7</span> → 3 sold ✓</li>
+              <li><span className="text-gray-400">Expected 10, Actual 10</span> → 0 sold</li>
+              <li><span className="text-amber-400">Expected 10, Actual 12</span> → +2 discrepancy (report to manager)</li>
+            </ul>
+          </div>
+          <p className="text-amber-400 text-xs mt-3">⚠️ Count IMMEDIATELY after stream ends (within 30 min)</p>
+        </div>
+      </Instructions>
         
         {step !== 1 && (
           <button onClick={handleNewCount} className="btn btn-secondary">

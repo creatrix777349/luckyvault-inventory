@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { fetchLocations, fetchInventory, createMovement, updateInventory } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
 import SearchableSelect from '../components/SearchableSelect'
+import Instructions from '../components/Instructions'
 import { ArrowRightLeft, ArrowRight, Save } from 'lucide-react'
 
 // All valid physical locations for inventory movement
@@ -190,6 +191,20 @@ export default function MovedInventory() {
         </h1>
         <p className="text-gray-400 mt-1">Transfer inventory between locations</p>
       </div>
+
+      <Instructions title="How to move inventory">
+        <div className="space-y-3 text-gray-300">
+          <p className="font-medium text-white">Transfer products between locations:</p>
+          <ol className="list-decimal list-inside space-y-2 ml-2">
+            <li>Select <span className="text-vault-gold">FROM location</span> (where it's coming from)</li>
+            <li>Select <span className="text-vault-gold">TO location</span> (where it's going)</li>
+            <li>Search and select the <span className="text-vault-gold">product</span></li>
+            <li>Enter <span className="text-vault-gold">quantity</span> to move</li>
+            <li>Click <span className="text-vault-gold">Move Inventory</span></li>
+          </ol>
+          <p className="text-orange-400 text-xs mt-3">💡 Common: Master Inventory → Stream Room before streams</p>
+        </div>
+      </Instructions>
 
       <form onSubmit={handleSubmit} className="card max-w-2xl">
         <div className="mb-4">

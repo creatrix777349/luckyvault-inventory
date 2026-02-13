@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { fetchProducts, fetchLocations, fetchInventory, createBoxBreak, updateInventory } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
 import SearchableSelect from '../components/SearchableSelect'
+import Instructions from '../components/Instructions'
 import { Box, ArrowDown, Save, AlertCircle, Package } from 'lucide-react'
 
 // Helper to extract Launch Name
@@ -182,6 +183,23 @@ export default function BreakBox() {
         </h1>
         <p className="text-gray-400 mt-1">Break sealed products into packs</p>
       </div>
+
+      <Instructions title="How to break a box">
+        <div className="space-y-3 text-gray-300">
+          <p className="font-medium text-white">Open sealed boxes into individual packs:</p>
+          <ol className="list-decimal list-inside space-y-2 ml-2">
+            <li>Select the <span className="text-vault-gold">sealed product</span> to break</li>
+            <li>Enter <span className="text-vault-gold">number of boxes</span> to break</li>
+            <li>Verify the <span className="text-vault-gold">pack count</span> is correct</li>
+            <li>Click <span className="text-vault-gold">Break Box</span></li>
+          </ol>
+          <div className="mt-4 p-3 bg-vault-surface rounded border border-vault-border">
+            <p className="font-medium text-white mb-2">Result:</p>
+            <p>System removes <span className="text-red-400">-1 sealed box</span> and adds <span className="text-green-400">+X packs</span> to inventory</p>
+            <p className="text-gray-400 text-xs mt-1">Cost per pack is auto-calculated from box cost</p>
+          </div>
+        </div>
+      </Instructions>
 
       <form onSubmit={handleSubmit} className="card max-w-2xl">
         <div className="mb-4">

@@ -9,6 +9,7 @@ import {
   convertToUSD
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
+import Instructions from '../components/Instructions'
 import { Package, Check, AlertTriangle } from 'lucide-react'
 
 // Helper to extract Launch Name from full product name
@@ -128,6 +129,19 @@ export default function IntakeToMaster() {
         </h1>
         <p className="text-gray-400 mt-1">Receive purchased items into Master Inventory</p>
       </div>
+
+      <Instructions title="How to receive items">
+        <div className="space-y-3 text-gray-300">
+          <p className="font-medium text-white">When purchased items arrive:</p>
+          <ol className="list-decimal list-inside space-y-2 ml-2">
+            <li>Find the <span className="text-vault-gold">purchase order</span> in the list below</li>
+            <li>Verify <span className="text-vault-gold">physical items match</span> the order</li>
+            <li>Enter <span className="text-vault-gold">quantity received</span> (can be partial)</li>
+            <li>Click <span className="text-vault-gold">Receive</span></li>
+          </ol>
+          <p className="text-cyan-400 text-xs mt-3">💡 Items are added to Master Inventory with their purchase cost</p>
+        </div>
+      </Instructions>
 
       {acquisitions.length === 0 ? (
         <div className="card text-center py-12">

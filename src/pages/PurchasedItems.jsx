@@ -5,6 +5,7 @@ import {
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
 import SearchableSelect from '../components/SearchableSelect'
+import Instructions from '../components/Instructions'
 import { ShoppingCart, Plus, Save, X, Trash2 } from 'lucide-react'
 
 // Helper to extract Launch Name from full product name
@@ -219,6 +220,22 @@ export default function PurchasedItems() {
         </h1>
         <p className="text-gray-400 mt-1">Log new inventory purchases</p>
       </div>
+
+      <Instructions title="How to log a purchase">
+        <div className="space-y-3 text-gray-300">
+          <p className="font-medium text-white">When you buy inventory from a vendor:</p>
+          <ol className="list-decimal list-inside space-y-2 ml-2">
+            <li>Enter <span className="text-vault-gold">purchase date</span></li>
+            <li>Select <span className="text-vault-gold">acquirer</span> (who bought it)</li>
+            <li>Select or add <span className="text-vault-gold">vendor</span></li>
+            <li>Select <span className="text-vault-gold">payment method</span></li>
+            <li>Select <span className="text-vault-gold">currency</span> (USD, YEN, RMB)</li>
+            <li>Add products with <span className="text-vault-gold">quantity and cost</span></li>
+            <li>Click <span className="text-vault-gold">Log Purchase</span></li>
+          </ol>
+          <p className="text-blue-400 text-xs mt-3">💡 Items will appear in "Intake to Master" for receiving into inventory</p>
+        </div>
+      </Instructions>
 
       <form onSubmit={handleSubmit}>
         {/* Header Section */}
