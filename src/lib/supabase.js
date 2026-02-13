@@ -492,3 +492,15 @@ export const fetchInventoryForRoom = async (locationId) => {
     return (a.product?.name || '').localeCompare(b.product?.name || '')
   })
 }
+
+// ADD THIS FUNCTION TO YOUR src/lib/supabase.js FILE
+
+export const createPaymentMethod = async (name) => {
+  const { data, error } = await supabase
+    .from('payment_methods')
+    .insert([{ name, active: true }])
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
