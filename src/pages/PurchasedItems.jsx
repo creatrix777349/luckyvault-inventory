@@ -5,8 +5,7 @@ import {
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
 import SearchableSelect from '../components/SearchableSelect'
-import Instructions from '../components/Instructions'
-import { ShoppingCart, Plus, Save, X, Trash2 } from 'lucide-react'
+import { ShoppingCart, Plus, Save, X, Trash2, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react'
 
 // Helper to extract Launch Name from full product name
 const extractLaunchName = (fullName, category) => {
@@ -30,6 +29,7 @@ export default function PurchasedItems() {
   const [newVendorCountry, setNewVendorCountry] = useState('USA')
   const [showNewPayment, setShowNewPayment] = useState(false)
   const [newPaymentName, setNewPaymentName] = useState('')
+  const [showInstructions, setShowInstructions] = useState(false)
 
   const [header, setHeader] = useState({
     date_purchased: new Date().toISOString().split('T')[0],
@@ -221,21 +221,40 @@ export default function PurchasedItems() {
         <p className="text-gray-400 mt-1">Log new inventory purchases</p>
       </div>
 
-      <Instructions>
-        <div className="space-y-3 text-gray-300">
-          <p className="font-medium text-white">When you buy inventory from a vendor:</p>
-          <ol className="list-decimal list-inside space-y-2 ml-2">
-            <li>Enter <span className="text-vault-gold">purchase date</span></li>
-            <li>Select <span className="text-vault-gold">acquirer</span> (who bought it)</li>
-            <li>Select or add <span className="text-vault-gold">vendor</span></li>
-            <li>Select <span className="text-vault-gold">payment method</span></li>
-            <li>Select <span className="text-vault-gold">currency</span> (USD, YEN, RMB)</li>
-            <li>Add products with <span className="text-vault-gold">quantity and cost</span></li>
-            <li>Click <span className="text-vault-gold">Log Purchase</span></li>
-          </ol>
-          <p className="text-blue-400 text-xs mt-3">💡 Items will appear in "Intake to Master" for receiving into inventory</p>
-        </div>
-      </Instructions>
+      <div className="mb-4">
+        <button
+          onClick={() => setShowInstructions(!showInstructions)}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-vault-surface border border-vault-border rounded-lg text-gray-300 hover:text-vault-gold hover:border-vault-gold transition-colors"
+        >
+          <HelpCircle size={16} />
+          <span>Instructions</span>
+          {showInstructions ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+        
+        {showInstructions && (
+          <div className="mt-3 p-4 bg-vault-dark border border-vault-border rounded-lg text-sm relative">
+            <button 
+              onClick={() => setShowInstructions(false)}
+              className="absolute top-2 right-2 text-gray-500 hover:text-white"
+            >
+              <X size={16} />
+            </button>
+            <div className="space-y-3 text-gray-300">
+              <p className="font-medium text-white">When you buy inventory from a vendor:</p>
+              <ol className="list-decimal list-inside space-y-2 ml-2">
+                <li>Enter <span className="text-vault-gold">purchase date</span></li>
+                <li>Select <span className="text-vault-gold">acquirer</span> (who bought it)</li>
+                <li>Select or add <span className="text-vault-gold">vendor</span></li>
+                <li>Select <span className="text-vault-gold">payment method</span></li>
+                <li>Select <span className="text-vault-gold">currency</span> (USD, YEN, RMB)</li>
+                <li>Add products with <span className="text-vault-gold">quantity and cost</span></li>
+                <li>Click <span className="text-vault-gold">Log Purchase</span></li>
+              </ol>
+              <p className="text-blue-400 text-xs mt-3">💡 Items will appear in "Intake to Master" for receiving into inventory</p>
+            </div>
+          </div>
+        )}
+      </div>
 
       <form onSubmit={handleSubmit}>
         {/* Header Section */}
