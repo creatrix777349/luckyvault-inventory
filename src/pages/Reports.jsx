@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
+import Instructions from '../components/Instructions'
 import { BarChart3, Calendar, CalendarRange, CalendarDays, ShoppingCart, Receipt, FileText, Filter, ClipboardList } from 'lucide-react'
 
 export default function Reports() {
@@ -85,7 +86,7 @@ export default function Reports() {
       let streamCounts = []
       let streamCountItems = []
       try {
-        // Query using simple date range (count_time is stored as local time)
+        // Fetch recent stream counts, then filter by LOCAL date
         const { data: countsData, error: countsError } = await supabase
           .from('stream_counts')
           .select(`
@@ -94,12 +95,18 @@ export default function Reports() {
             streamer:users!stream_counts_streamer_id_fkey(name),
             counted_by:users!stream_counts_counted_by_id_fkey(name)
           `)
-          .gte('count_time', `${start}T00:00:00`)
-          .lte('count_time', `${end}T23:59:59`)
           .order('count_time', { ascending: false })
+          .limit(500)
         
         if (countsData && !countsError) {
-          streamCounts = countsData
+          // Filter by converting to local date
+          streamCounts = countsData.filter(c => {
+            if (!c.count_time) return false
+            // Convert UTC timestamp to local date string (YYYY-MM-DD)
+            const utcDate = new Date(c.count_time)
+            const localDateStr = utcDate.toLocaleDateString('en-CA') // Returns YYYY-MM-DD
+            return localDateStr >= start && localDateStr <= end
+          })
           
           // Fetch all items for these counts
           if (countsData.length > 0) {
@@ -264,6 +271,26 @@ export default function Reports() {
         </h1>
         <p className="text-gray-400 mt-1">View acquisitions, expenses, and summaries</p>
       </div>
+
+      <Instructions>
+        <div className="space-y-3 text-gray-300">
+          <p className="font-medium text-white">Generate reports for any date range:</p>
+          <ol className="list-decimal list-inside space-y-2 ml-2">
+            <li>Select <span className="text-vault-gold">Single Day</span>, <span className="text-vault-gold">Date Range</span>, or <span className="text-vault-gold">Weekly</span></li>
+            <li>Pick your <span className="text-vault-gold">date(s)</span></li>
+            <li>Click <span className="text-vault-gold">Generate</span></li>
+          </ol>
+          <div className="mt-4 p-3 bg-vault-surface rounded border border-vault-border">
+            <p className="font-medium text-white mb-2">Report includes:</p>
+            <ul className="space-y-1 text-sm">
+              <li>• <span className="text-green-400">Stream Counts</span> - Units sold per stream</li>
+              <li>• <span className="text-vault-gold">Acquisitions</span> - Purchase costs</li>
+              <li>• <span className="text-purple-400">Expenses</span> - Business costs</li>
+              <li>• <span className="text-white">Summary</span> - Totals by category</li>
+            </ul>
+          </div>
+        </div>
+      </Instructions>
 
       {/* Date Selection */}
       <div className="card mb-6">

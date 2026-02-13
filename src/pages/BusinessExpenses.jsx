@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase, convertToUSD } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
+import Instructions from '../components/Instructions'
 import { Receipt, Truck, Building, Zap, Utensils, Plane, MoreHorizontal, Save, DollarSign, Plus, X } from 'lucide-react'
 
 const EXPENSE_CATEGORIES = [
@@ -158,6 +159,21 @@ export default function BusinessExpenses() {
         </h1>
         <p className="text-gray-400 mt-1">Track business expenses by category</p>
       </div>
+
+      <Instructions>
+        <div className="space-y-3 text-gray-300">
+          <p className="font-medium text-white">Record a business expense:</p>
+          <ol className="list-decimal list-inside space-y-2 ml-2">
+            <li>Enter the <span className="text-vault-gold">date</span></li>
+            <li>Enter the <span className="text-vault-gold">amount</span> and select currency</li>
+            <li>Select a <span className="text-vault-gold">category</span> (Shipping, Office, Utilities, etc.)</li>
+            <li>Select <span className="text-vault-gold">payment method</span></li>
+            <li>Add a <span className="text-vault-gold">description</span></li>
+            <li>Click <span className="text-vault-gold">Save Expense</span></li>
+          </ol>
+          <p className="text-purple-400 text-xs mt-3">💡 Expenses appear in Reports for tracking spending</p>
+        </div>
+      </Instructions>
 
       {/* Add Expense Form */}
       <form onSubmit={handleSubmit} className="card mb-6">

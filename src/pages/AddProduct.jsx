@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { createProduct } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
+import Instructions from '../components/Instructions'
 import { Plus, Save, Trash2 } from 'lucide-react'
 
 // Product Type options matching sheet nomenclature
@@ -230,6 +231,21 @@ export default function AddProduct() {
         </h1>
         <p className="text-gray-400 mt-1">Add sealed products following the standard nomenclature</p>
       </div>
+
+      <Instructions>
+        <div className="space-y-3 text-gray-300">
+          <p className="font-medium text-white">Add a new product to the system:</p>
+          <ol className="list-decimal list-inside space-y-2 ml-2">
+            <li>Select <span className="text-vault-gold">Brand</span> (Pokemon, One Piece)</li>
+            <li>Select <span className="text-vault-gold">Language</span> (EN, JP, CN)</li>
+            <li>Enter <span className="text-vault-gold">Launch Name</span> (e.g., "Prismatic Evolutions")</li>
+            <li>Select <span className="text-vault-gold">Product Type</span> (Booster Box, ETB, etc.)</li>
+            <li>If breakable, check the box and enter <span className="text-vault-gold"># of packs</span></li>
+            <li>Click <span className="text-vault-gold">Add Product</span></li>
+          </ol>
+          <p className="text-emerald-400 text-xs mt-3">💡 Use "Bulk Add" mode to add multiple products at once</p>
+        </div>
+      </Instructions>
 
       {/* Mode Toggle */}
       <div className="flex gap-2 mb-6">

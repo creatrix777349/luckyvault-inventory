@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { fetchInventory, fetchLocations, supabase } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
+import Instructions from '../components/Instructions'
 import { Eye, Package, Search, Edit2, Save, X, Trash2 } from 'lucide-react'
 
 // Helper to get currency based on language
@@ -173,6 +174,20 @@ export default function ViewInventory() {
         </h1>
         <p className="text-gray-400 mt-1">View sealed product inventory across all locations</p>
       </div>
+
+      <Instructions>
+        <div className="space-y-3 text-gray-300">
+          <p className="font-medium text-white">View and manage inventory:</p>
+          <ul className="list-disc list-inside space-y-2 ml-2">
+            <li><span className="text-vault-gold">Filter</span> by location, brand, or type</li>
+            <li><span className="text-vault-gold">Search</span> by product name</li>
+            <li>See <span className="text-vault-gold">quantity</span> and <span className="text-vault-gold">cost basis</span> per item</li>
+            <li>Click <span className="text-vault-gold">Edit</span> to adjust quantities directly</li>
+            <li>Click <span className="text-vault-gold">Delete</span> to remove a line item</li>
+          </ul>
+          <p className="text-slate-400 text-xs mt-3">💡 Inventory is grouped by location</p>
+        </div>
+      </Instructions>
 
       {/* Filters */}
       <div className="card mb-6">

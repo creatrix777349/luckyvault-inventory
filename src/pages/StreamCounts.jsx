@@ -381,7 +381,7 @@ export default function StreamCounts() {
         </div>
       </div>
 
-      <Instructions title="How to use Stream Counts">
+      <Instructions>
         <div className="space-y-3 text-gray-300">
           <p className="font-medium text-white">After each stream ends, log the remaining inventory count:</p>
           <ol className="list-decimal list-inside space-y-2 ml-2">
@@ -403,13 +403,14 @@ export default function StreamCounts() {
           <p className="text-amber-400 text-xs mt-3">⚠️ Count IMMEDIATELY after stream ends (within 30 min)</p>
         </div>
       </Instructions>
-        
-        {step !== 1 && (
+
+      {step !== 1 && (
+        <div className="mb-4">
           <button onClick={handleNewCount} className="btn btn-secondary">
             New Count
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Step 1: Select Room & People */}
       {step === 1 && (

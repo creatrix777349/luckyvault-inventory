@@ -9,6 +9,7 @@ import {
   supabase
 } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
+import Instructions from '../components/Instructions'
 import { Star, Plus, Save, X, ArrowRightLeft, Camera, Upload, TrendingUp, TrendingDown, Edit2 } from 'lucide-react'
 
 // Grade options for dropdown
@@ -101,6 +102,20 @@ export default function HighValueTracking() {
           Add Item
         </button>
       </div>
+
+      <Instructions>
+        <div className="space-y-3 text-gray-300">
+          <p className="font-medium text-white">Track high-value cards and slabs:</p>
+          <ol className="list-decimal list-inside space-y-2 ml-2">
+            <li>Click <span className="text-vault-gold">Add Item</span> to log a new high-value piece</li>
+            <li>Enter <span className="text-vault-gold">card name, brand, grade</span> (if slab)</li>
+            <li>Enter <span className="text-vault-gold">purchase price</span> and <span className="text-vault-gold">market price</span></li>
+            <li>Upload a <span className="text-vault-gold">photo</span> (optional)</li>
+            <li>Click <span className="text-vault-gold">Move</span> to transfer between locations</li>
+          </ol>
+          <p className="text-yellow-400 text-xs mt-3">💡 Update market prices regularly to track P&L</p>
+        </div>
+      </Instructions>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="card">

@@ -221,7 +221,7 @@ export default function PurchasedItems() {
         <p className="text-gray-400 mt-1">Log new inventory purchases</p>
       </div>
 
-      <Instructions title="How to log a purchase">
+      <Instructions>
         <div className="space-y-3 text-gray-300">
           <p className="font-medium text-white">When you buy inventory from a vendor:</p>
           <ol className="list-decimal list-inside space-y-2 ml-2">

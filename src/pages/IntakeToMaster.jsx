@@ -130,7 +130,7 @@ export default function IntakeToMaster() {
         <p className="text-gray-400 mt-1">Receive purchased items into Master Inventory</p>
       </div>
 
-      <Instructions title="How to receive items">
+      <Instructions>
         <div className="space-y-3 text-gray-300">
           <p className="font-medium text-white">When purchased items arrive:</p>
           <ol className="list-decimal list-inside space-y-2 ml-2">

@@ -192,7 +192,7 @@ export default function MovedInventory() {
         <p className="text-gray-400 mt-1">Transfer inventory between locations</p>
       </div>
 
-      <Instructions title="How to move inventory">
+      <Instructions>
         <div className="space-y-3 text-gray-300">
           <p className="font-medium text-white">Transfer products between locations:</p>
           <ol className="list-decimal list-inside space-y-2 ml-2">

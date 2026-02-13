@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { fetchProducts, fetchLocations, updateInventory } from '../lib/supabase'
 import { ToastContainer, useToast } from '../components/Toast'
 import SearchableSelect from '../components/SearchableSelect'
+import Instructions from '../components/Instructions'
 import { PackagePlus, Save, Plus, Trash2 } from 'lucide-react'
 
 // Helper to extract Launch Name from full product name
@@ -207,6 +208,20 @@ export default function ManualInventory() {
         </h1>
         <p className="text-gray-400 mt-1">Add inventory directly without purchase record</p>
       </div>
+
+      <Instructions>
+        <div className="space-y-3 text-gray-300">
+          <p className="font-medium text-white">Add inventory directly to a location:</p>
+          <ol className="list-decimal list-inside space-y-2 ml-2">
+            <li>Select the <span className="text-vault-gold">location</span></li>
+            <li>Search and select the <span className="text-vault-gold">product</span></li>
+            <li>Enter <span className="text-vault-gold">quantity</span></li>
+            <li>Optionally enter <span className="text-vault-gold">avg purchase price</span></li>
+            <li>Click <span className="text-vault-gold">Add to Inventory</span></li>
+          </ol>
+          <p className="text-teal-400 text-xs mt-3">💡 Use this for initial inventory setup or corrections</p>
+        </div>
+      </Instructions>
 
       {/* Mode Toggle */}
       <div className="flex gap-2 mb-6">

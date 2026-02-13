@@ -184,7 +184,7 @@ export default function BreakBox() {
         <p className="text-gray-400 mt-1">Break sealed products into packs</p>
       </div>
 
-      <Instructions title="How to break a box">
+      <Instructions>
         <div className="space-y-3 text-gray-300">
           <p className="font-medium text-white">Open sealed boxes into individual packs:</p>
           <ol className="list-decimal list-inside space-y-2 ml-2">

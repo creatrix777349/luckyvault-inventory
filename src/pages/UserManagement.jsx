@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { ToastContainer, useToast } from '../components/Toast'
+import Instructions from '../components/Instructions'
 import { Users, Plus, Edit2, Trash2, Save, X, UserPlus, Key, RefreshCw, Check } from 'lucide-react'
 
 // All available pages with labels
@@ -309,6 +310,19 @@ export default function UserManagement() {
           <UserPlus size={18} /> Add User
         </button>
       </div>
+
+      <Instructions>
+        <div className="space-y-3 text-gray-300">
+          <p className="font-medium text-white">Manage team access:</p>
+          <ul className="list-disc list-inside space-y-2 ml-2">
+            <li><span className="text-vault-gold">Add User</span> - Create new team members with PIN login</li>
+            <li><span className="text-vault-gold">Edit</span> - Change name, PIN, or page access</li>
+            <li><span className="text-vault-gold">Reset PIN</span> - Generate a new 4-digit PIN</li>
+            <li><span className="text-vault-gold">Deactivate</span> - Disable access without deleting</li>
+          </ul>
+          <p className="text-blue-400 text-xs mt-3">💡 Control which pages each user can access by checking/unchecking pages</p>
+        </div>
+      </Instructions>
 
       {/* Add New User Form */}
       {showAddForm && (
